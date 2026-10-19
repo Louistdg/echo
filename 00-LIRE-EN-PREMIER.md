@@ -4,6 +4,9 @@ Application de bureau de capture vocale locale (Tauri 2 + SvelteKit + Rust).
 Créé le 19/10/2026 sous le nom BOCNOT, renommé **Écho** le même jour.
 Chemin : `D:\DSH\default-workspace\Écho`.
 
+**Dépôt public : <https://github.com/Louistdg/echo>** (branche `main`).
+Les missions (M1 terminée, M2 à venir) sont décrites dans `docs/MISSIONS.md`.
+
 ## Fichiers
 
 | Fichier | Rôle |
@@ -12,6 +15,8 @@ Chemin : `D:\DSH\default-workspace\Écho`.
 | `01-PROMPT-A-COLLER-SOCLE.txt` | contrat de travail (méthode), recopié octet pour octet — voir la réserve plus bas |
 | `README.md` | README du squelette + écart structurel avec le plan |
 | `docs/architecture.md` | plan d'architecture v1.0 |
+| `docs/MISSIONS.md` | M1 (livrée, avec preuves) et M2 (capture audio) |
+| `tests/manuel/` | harnais de test M1 (kill-test, ui-message) |
 | `src-tauri/src/recovery.rs` | journal de récupération append-only |
 | `src-tauri/src/atomic.rs` | écriture atomique (fichier temporaire + `ReplaceFileW`) |
 | `src/`, `src-tauri/`, `static/` | le reste du code |
