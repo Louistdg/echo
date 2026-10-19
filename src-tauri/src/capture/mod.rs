@@ -4,8 +4,10 @@
 //
 // Le périphérique est ouvert dans SON format natif (fréquence et canaux
 // quelconques) ; la conversion vers WAV 16 kHz mono est faite en logiciel par
-// `Converter` (moyenne des canaux puis interpolation linéaire). Le fichier
-// temporaire vit dans `%TEMP%\Écho\` et est purgé au démarrage suivant.
+// `Converter` (moyenne des canaux puis interpolation linéaire). Le fichier est
+// écrit dans `<dossier de notes>/.echo/audio/` sous forme `<horodatage>.wav`,
+// d'abord en `.part` puis renommé à l'arrêt : un arrêt brutal laisse un `.part`
+// reconnaissable, purgé au démarrage suivant, jamais un WAV trompeur.
 //
 // `capture:level` est émis à ~30 Hz par l'interface appelante (`start` reçoit un
 // émetteur), ce qui garde ce module testable sans Tauri.
@@ -49,35 +51,34 @@ struct Active {
     join: std::thread::JoinHandle<Result<CaptureInfo, String>>,
 }
 
-/// Dossier des fichiers temporaires.
-pub fn temp_dir() -> PathBuf {
-    std::env::temp_dir().join("Écho")
+/// Dossier des enregistrements, à côté des notes : `<notes>/.echo/audio`.
+pub fn recordings_dir(notes_dir: &Path) -> PathBuf {
+    notes_dir.join(".echo").join("audio")
 }
 
-/// Supprime tous les WAV temporaires d'un dossier. Retourne le nombre effacé.
-/// Appelé au démarrage : une capture interrompue par un arrêt brutal ne doit
-/// pas laisser de fichier derrière elle.
-pub fn purge_dir(dir: &Path) -> usize {
+/// Supprime les `.part` d'un dossier (enregistrements interrompus). Ne touche
+/// jamais aux WAV finalisés : un enregistrement terminé est une donnée
+/// utilisateur, pas un temporaire.
+pub fn purge_parts(dir: &Path) -> usize {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
     };
     let mut n = 0;
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().map(|e| e == "wav").unwrap_or(false) && fs::remove_file(&p).is_ok() {
+        if p.extension().map(|e| e == "part").unwrap_or(false) && fs::remove_file(&p).is_ok() {
             n += 1;
         }
     }
     n
 }
 
-pub fn purge_temp() -> usize {
-    purge_dir(&temp_dir())
-}
-
-/// Démarre une capture. `emit_level` reçoit le RMS (0..1) à ~30 Hz.
+/// Démarre une capture dans `output_dir`. `emit_level` reçoit le RMS (0..1).
 /// Retourne dès que le flux audio tourne réellement.
-pub fn start(emit_level: impl Fn(f32) + Send + 'static) -> Result<(), String> {
+pub fn start(
+    output_dir: PathBuf,
+    emit_level: impl Fn(f32) + Send + 'static,
+) -> Result<(), String> {
     let mut slot = SESSION
         .lock()
         .map_err(|_| "état de capture corrompu".to_string())?;
@@ -85,19 +86,18 @@ pub fn start(emit_level: impl Fn(f32) + Send + 'static) -> Result<(), String> {
         return Err("une capture est déjà en cours".into());
     }
 
-    let dir = temp_dir();
-    fs::create_dir_all(&dir).map_err(|e| format!("dossier temporaire inaccessible : {e}"))?;
-    let path = dir.join(format!(
-        "capture-{}.wav",
-        chrono::Local::now().format("%Y%m%d-%H%M%S%.3f")
-    ));
+    fs::create_dir_all(&output_dir)
+        .map_err(|e| format!("dossier d'enregistrement inaccessible : {e}"))?;
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let final_path = output_dir.join(format!("{stamp}.wav"));
+    let path = output_dir.join(format!("{stamp}.wav.part"));
 
     PAUSED.store(false, Ordering::Relaxed);
     let stop = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
 
     let stop_thread = stop.clone();
-    let join = std::thread::spawn(move || run(path, stop_thread, emit_level, ready_tx));
+    let join = std::thread::spawn(move || run(path, final_path, stop_thread, emit_level, ready_tx));
 
     match ready_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(Ok(())) => {
@@ -166,6 +166,7 @@ pub fn is_running() -> bool {
 /// garanti `Send`) ; on le maintient en vie jusqu'au drapeau d'arrêt.
 fn run(
     path: PathBuf,
+    final_path: PathBuf,
     stop: Arc<AtomicBool>,
     emit_level: impl Fn(f32) + Send + 'static,
     ready: mpsc::Sender<Result<(), String>>,
@@ -322,8 +323,12 @@ fn run(
         return Err(format!("capture interrompue : {e}"));
     }
 
+    // Le fichier n'est visible sous son vrai nom qu'une fois complet.
+    fs::rename(&path, &final_path)
+        .map_err(|e| format!("enregistrement non renommé ({} ) : {e}", final_path.display()))?;
+
     Ok(CaptureInfo {
-        path: path.to_string_lossy().into_owned(),
+        path: final_path.to_string_lossy().into_owned(),
         duration_secs: samples as f64 / TARGET_RATE as f64,
         samples,
         sample_rate: TARGET_RATE,
@@ -577,13 +582,16 @@ mod tests {
     }
 
     #[test]
-    fn la_purge_efface_les_wav_et_rien_d_autre() {
+    fn la_purge_efface_les_part_et_rien_d_autre() {
         let dir = std::env::temp_dir().join(format!("echo-purge-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("capture-1.wav"), b"x").unwrap();
-        fs::write(dir.join("capture-2.wav"), b"x").unwrap();
-        fs::write(dir.join("garde.txt"), b"x").unwrap();
-        assert_eq!(purge_dir(&dir), 2);
-        assert!(dir.join("garde.txt").exists());
+        fs::write(dir.join("capture-1.wav.part"), b"x").unwrap();
+        fs::write(dir.join("capture-2.wav.part"), b"x").unwrap();
+        fs::write(dir.join("termine.wav"), b"x").unwrap();
+        assert_eq!(purge_parts(&dir), 2);
+        assert!(
+            dir.join("termine.wav").exists(),
+            "un enregistrement finalisé ne doit jamais être purgé"
+        );
     }
 }

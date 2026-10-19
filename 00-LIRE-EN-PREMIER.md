@@ -142,6 +142,9 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 - 19/10/2026 22:05 : M1.1 — corrections après revue externe : note illisible refusée,
   conflits externes préservés, identifiant d'opération stable, dossier journalisé,
   journal abîmé signalé, erreurs WAV remontées, anti-repliement 7,2 kHz. 28 tests.
+- 19/10/2026 23:10 : M2.1 — audio rangé dans `<notes>/.echo/audio/` (les WAV finalisés
+  ne sont plus purgés), historique cliquable, boutons « Ouvrir le dossier », panneau
+  flottant déplaçable / épinglable / trois thèmes.
 
 ## M2 — Capture audio (livrée le 19/10/2026)
 

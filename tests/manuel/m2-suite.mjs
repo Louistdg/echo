@@ -1,15 +1,23 @@
 // Suite M2 : mesure l'enregistrement réel (WAV, niveaux, pause, purge).
 // Usage : node m2-suite.mjs <ten|pause|kill|rms>
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 const BASE = process.env.ECHO_BASE ?? process.cwd();
 const EXE = process.env.ECHO_EXE ?? path.join(BASE, "src-tauri", "target", "debug", "echo.exe");
 const CDP = Number(process.env.ECHO_CDP ?? 9222);
-const TEMP = path.join(process.env.LOCALAPPDATA, "Temp", "Écho");
+const NOTES = process.env.ECHO_NOTES ?? path.join(BASE, ".test-notes");
+const AUDIO = path.join(NOTES, ".echo", "audio");
+const CFG = path.join(process.env.APPDATA, "com.echo.notes");
 const TON = path.join(process.env.TEMP, "echo-ton-test.wav");
 const mode = process.argv[2] ?? "ten";
+
+function ecrireSettings() {
+  mkdirSync(CFG, { recursive: true });
+  mkdirSync(AUDIO, { recursive: true });
+  writeFileSync(path.join(CFG, "settings.json"), JSON.stringify({ notes_dir: NOTES }), "utf8");
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let app = null;
@@ -85,13 +93,13 @@ function arreter() {
   app = null;
 }
 
-function wav(nom) {
-  const p = path.join(TEMP, nom);
+function wav(chemin) {
+  const p = chemin;
   const b = readFileSync(p);
   const u16 = (o) => b.readUInt16LE(o);
   const u32 = (o) => b.readUInt32LE(o);
   return {
-    fichier: nom,
+    fichier: path.basename(chemin),
     octets: b.length,
     riff: b.toString("ascii", 0, 4),
     wave: b.toString("ascii", 8, 12),
@@ -127,6 +135,7 @@ const noter = (nom, valeur, ok = null) => {
   console.log(`${ok === false ? "ECHEC" : ok === true ? "OK   " : "INFO "} ${nom} : ${JSON.stringify(valeur)}`);
 };
 
+ecrireSettings();
 await demarrer();
 
 if (mode === "ten" || mode === "pause" || mode === "rms") {
@@ -143,7 +152,7 @@ if (mode === "ten") {
   noter("echantillons", info.samples);
   const ecart = Math.abs(info.duration_secs - 10);
   noter("duree proche de 10 s (tolerance 0,25 s)", ecart, ecart < 0.25);
-  const w = wav(path.basename(info.path));
+  const w = wav(info.path);
   noter("wav", w);
   noter("taille = 44 + 2*echantillons", w.octets === 44 + 2 * info.samples, w.octets === 44 + 2 * info.samples);
   noter("canaux = 1", w.canaux === 1, w.canaux === 1);
@@ -196,15 +205,15 @@ if (mode === "kill") {
   await sleep(1200);
   arreter();
   await sleep(600);
-  const restes = existsSync(TEMP) ? readdirSync(TEMP).filter((f) => f.endsWith(".wav")) : [];
-  noter("wav restant apres taskkill", restes);
-  noter("au moins un wav laisse (attendu)", restes.length >= 1, restes.length >= 1);
+  const restes = existsSync(AUDIO) ? readdirSync(AUDIO).filter((f) => f.endsWith(".part")) : [];
+  noter(".part restant apres taskkill", restes);
+  noter("au moins un .part laisse (attendu)", restes.length >= 1, restes.length >= 1);
   await sleep(300);
   await demarrer();
   await sleep(1200);
-  const apres = existsSync(TEMP) ? readdirSync(TEMP).filter((f) => f.endsWith(".wav")) : [];
-  noter("wav restants apres redemarrage", apres);
-  noter("purge au demarrage", apres.length === 0, apres.length === 0);
+  const apres = existsSync(AUDIO) ? readdirSync(AUDIO) : [];
+  noter("fichiers apres redemarrage", apres);
+  noter(".part purge au demarrage", !apres.some((f) => f.endsWith(".part")), !apres.some((f) => f.endsWith(".part")));
 }
 
 console.log(JSON.stringify(resultat, null, 2));

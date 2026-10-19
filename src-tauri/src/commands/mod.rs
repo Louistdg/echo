@@ -282,15 +282,133 @@ pub struct LevelPayload {
     pub rms: f32,
 }
 
-/// Démarre la capture micro. Échoue explicitement si aucun micro, si le
-/// périphérique refuse l'accès, ou si une capture est déjà en cours.
+/// Démarre la capture micro. L'audio est rangé dans
+/// `<dossier de notes>/.echo/audio/`, jamais dans un temporaire système.
 #[tauri::command]
 pub fn start_capture(app: AppHandle) -> Result<(), String> {
     use tauri::Emitter;
+    let root = load_settings(&app).notes_dir.ok_or(
+        "aucun dossier de notes configuré — choisis-le d'abord, l'audio est rangé juste à côté",
+    )?;
+    let dir = crate::capture::recordings_dir(&root);
     let handle = app.clone();
-    crate::capture::start(move |rms| {
+    crate::capture::start(dir, move |rms| {
         let _ = handle.emit("capture:level", LevelPayload { rms });
     })
+}
+
+/// Un enregistrement, tel que listé dans l'interface.
+#[derive(Serialize)]
+pub struct RecordingInfo {
+    pub name: String,
+    pub path: String,
+    pub duration_secs: f64,
+    pub modified: String,
+}
+
+/// Liste les 20 enregistrements les plus récents.
+#[tauri::command]
+pub fn list_recordings(app: AppHandle) -> Result<Vec<RecordingInfo>, String> {
+    let Some(root) = load_settings(&app).notes_dir else {
+        return Ok(Vec::new());
+    };
+    let dir = crate::capture::recordings_dir(&root);
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Ok(Vec::new());
+    };
+
+    let mut out: Vec<RecordingInfo> = entries
+        .flatten()
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|x| x.eq_ignore_ascii_case("wav"))
+                .unwrap_or(false)
+        })
+        .map(|e| {
+            let path = e.path();
+            let meta = e.metadata().ok();
+            let taille = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = meta
+                .and_then(|m| m.modified().ok())
+                .map(|t| {
+                    chrono::DateTime::<chrono::Local>::from(t)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                })
+                .unwrap_or_default();
+            RecordingInfo {
+                name: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                path: path.to_string_lossy().into_owned(),
+                duration_secs: taille.saturating_sub(44) as f64 / 32_000.0,
+                modified,
+            }
+        })
+        .collect();
+
+    out.sort_by(|a, b| b.name.cmp(&a.name));
+    out.truncate(20);
+    Ok(out)
+}
+
+/// Ouvre le dossier des enregistrements dans l'Explorateur.
+#[tauri::command]
+pub fn open_recordings_folder(app: AppHandle) -> Result<String, String> {
+    use tauri_plugin_opener::OpenerExt;
+    let root = load_settings(&app)
+        .notes_dir
+        .ok_or("aucun dossier de notes configuré")?;
+    let dir = crate::capture::recordings_dir(&root);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let chemin = dir.to_string_lossy().into_owned();
+    app.opener()
+        .open_path(chemin.clone(), None::<&str>)
+        .map_err(|e| format!("ouverture du dossier impossible : {e}"))?;
+    Ok(chemin)
+}
+
+/// Ouvre le dossier des notes dans l'Explorateur.
+#[tauri::command]
+pub fn open_notes_folder(app: AppHandle) -> Result<String, String> {
+    use tauri_plugin_opener::OpenerExt;
+    let root = load_settings(&app)
+        .notes_dir
+        .ok_or("aucun dossier de notes configuré")?;
+    let chemin = root.to_string_lossy().into_owned();
+    app.opener()
+        .open_path(chemin.clone(), None::<&str>)
+        .map_err(|e| format!("ouverture du dossier impossible : {e}"))?;
+    Ok(chemin)
+}
+
+/// Ouvre un enregistrement (lecteur par défaut), uniquement s'il vient du
+/// dossier d'enregistrements — un chemin arbitraire est refusé.
+#[tauri::command]
+pub fn open_recording(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let root = load_settings(&app)
+        .notes_dir
+        .ok_or("aucun dossier de notes configuré")?;
+    let dir = crate::capture::recordings_dir(&root);
+    let cible = PathBuf::from(&path);
+    if !cible.starts_with(&dir) {
+        return Err("ce fichier n'est pas dans le dossier d'enregistrements".into());
+    }
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|e| format!("ouverture impossible : {e}"))
+}
+
+/// Purge les `.part` laissés par un arrêt brutal. Ne touche jamais aux WAV
+/// finalisés : ce sont des données utilisateur.
+pub fn purge_recording_parts(app: &AppHandle) -> usize {
+    let Some(root) = load_settings(app).notes_dir else {
+        return 0;
+    };
+    crate::capture::purge_parts(&crate::capture::recordings_dir(&root))
 }
 
 /// Arrête la capture, finalise le WAV et retourne son emplacement et sa durée.

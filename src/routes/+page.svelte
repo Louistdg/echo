@@ -17,15 +17,61 @@
     recovery: string;
   } | null>(null);
 
+  type Enregistrement = {
+    name: string;
+    path: string;
+    duration_secs: number;
+    modified: string;
+  };
+
+  let enregistrements = $state<Enregistrement[]>([]);
+
   onMount(async () => {
     try {
       const settings = await invoke<{ notes_dir: string | null }>("get_settings");
       notesDir = settings.notes_dir ?? null;
       statut = await invoke("get_status");
+      await rafraichirEnregistrements();
     } catch (e) {
       message = `Erreur : ${String(e)}`;
     }
   });
+
+  async function rafraichirEnregistrements() {
+    try {
+      enregistrements = await invoke<Enregistrement[]>("list_recordings");
+    } catch {
+      enregistrements = [];
+    }
+  }
+
+  async function ouvrirDossier(genre: "notes" | "audio") {
+    try {
+      const chemin = await invoke<string>(
+        genre === "notes" ? "open_notes_folder" : "open_recordings_folder",
+      );
+      message = `Dossier ouvert : ${chemin}`;
+      enErreur = false;
+    } catch (e) {
+      message = String(e);
+      enErreur = true;
+    }
+  }
+
+  async function ouvrirEnregistrement(path: string) {
+    try {
+      await invoke("open_recording", { path });
+      enErreur = false;
+    } catch (e) {
+      message = String(e);
+      enErreur = true;
+    }
+  }
+
+  function duree(s: number) {
+    const m = Math.floor(s / 60);
+    return m > 0 ? `${m} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${s.toFixed(1)} s`;
+  }
 
   async function choisirDossier() {
     try {
@@ -78,18 +124,50 @@
     {:else}
       <p>Aucun dossier de notes configuré.</p>
     {/if}
-    <button onclick={choisirDossier}>Choisir le dossier…</button>
+    <div class="actions">
+      <button onclick={choisirDossier}>Choisir le dossier…</button>
+      {#if notesDir}
+        <button onclick={() => ouvrirDossier("notes")}>Ouvrir le dossier des notes</button>
+        <button onclick={() => ouvrirDossier("audio")}>Ouvrir le dossier des enregistrements</button>
+      {/if}
+    </div>
   </section>
 
   <section class="editeur">
     <textarea
       bind:value={texte}
       placeholder="Écris ici… (Ctrl+Alt+Espace ouvre la fenêtre d'enregistrement)"
-      rows="10"
+      rows="8"
     ></textarea>
     <div class="actions">
       <button class="principal" onclick={ajouterALaNote}>Ajouter à la note du jour</button>
     </div>
+  </section>
+
+  <section class="historique">
+    <div class="titre-ligne">
+      <h2>Enregistrements récents</h2>
+      <button class="discret" onclick={rafraichirEnregistrements}>Rafraîchir</button>
+    </div>
+    {#if !notesDir}
+      <p class="vide">Choisis d'abord un dossier de notes.</p>
+    {:else if enregistrements.length === 0}
+      <p class="vide">
+        Aucun enregistrement pour l'instant. Ouvre la fenêtre de dictée avec
+        <kbd>Ctrl+Alt+Espace</kbd>.
+      </p>
+    {:else}
+      <ul>
+        {#each enregistrements as e (e.path)}
+          <li>
+            <button class="ligne" onclick={() => ouvrirEnregistrement(e.path)} title={e.path}>
+              <span class="nom">{e.name}</span>
+              <span class="meta">{duree(e.duration_secs)} · {e.modified}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </section>
 
   {#if message}
@@ -199,5 +277,88 @@
 
   code {
     word-break: break-all;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .titre-ligne {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+  }
+
+  .historique ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #dcdce6;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .historique li + li {
+    border-top: 1px solid #ececf2;
+  }
+
+  .ligne {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: #fff;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ligne:hover {
+    background: #eef4ff;
+  }
+
+  .nom {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meta {
+    color: #666;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .vide {
+    color: #666;
+    margin: 0;
+  }
+
+  .discret {
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #c9c9d4;
+    background: #fff;
+    cursor: pointer;
+  }
+
+  kbd {
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    padding: 0.05rem 0.3rem;
+    border: 1px solid #c9c9d4;
+    border-radius: 4px;
+    background: #fff;
   }
 </style>

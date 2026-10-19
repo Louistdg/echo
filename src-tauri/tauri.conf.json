@@ -24,7 +24,7 @@
         "label": "quick",
         "title": "Écho — Dictée",
         "url": "/",
-        "width": 480,
+        "width": 400,
         "height": 170,
         "decorations": false,
         "resizable": false,

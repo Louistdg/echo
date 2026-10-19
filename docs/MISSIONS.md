@@ -95,6 +95,22 @@ Tracé : `docs/captures/rms-silence-vs-ton.png` (données brutes :
 - [x] Pause puis reprise : la durée finale = somme des deux segments.
 - [x] Aucun fichier audio ne subsiste dans `%TEMP%` après un arrêt brutal et redémarrage.
 
+## M2.1 — Rangement de l'audio et panneau flottant (19/10/2026)
+
+- L'audio est rangé dans `<dossier de notes>/.echo/audio/`, écrit en `.part` puis
+  renommé à l'arrêt. Les `.part` (enregistrements interrompus) sont purgés au
+  démarrage ; les WAV finalisés ne sont jamais supprimés.
+- Commandes : `list_recordings` (20 plus récents), `open_recordings_folder`,
+  `open_notes_folder`, `open_recording` (le chemin est validé : il doit être sous
+  le dossier d'enregistrements).
+- Panneau flottant : déplaçable (barre de glissement), épinglable (bouton 📌),
+  trois thèmes persistés (`nuit`, `rose`, `clair`), micro + VU-mètre en décibels.
+- Interface principale : boutons « Ouvrir le dossier des notes / des
+  enregistrements », historique cliquable avec nom, durée et date.
+- Vérifié : 10 s → `D:\test1.écho\.echo\audio\20261019-230720.wav` (321 218 octets,
+  44 + 2×160 587), historique d'une entrée, `.part` purgé au redémarrage, WAV
+  conservé. DOM du panneau : zone de glissement, 3 pastilles, bouton épingler.
+
 ## M3 — Transcription (non commencée)
 
 **Objectif.** Transformer un WAV 16 kHz mono en texte, hors ligne, sans bloquer
