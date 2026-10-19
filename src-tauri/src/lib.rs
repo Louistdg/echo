@@ -27,6 +27,12 @@ pub fn run() {
         .setup(|app| {
             tray::init(app.handle())?;
             shortcuts::init(app.handle())?;
+            // Une capture interrompue par un arrêt brutal laisse un WAV
+            // temporaire : on le purge avant toute nouvelle capture.
+            let purges = capture::purge_temp();
+            if purges > 0 {
+                eprintln!("capture : {purges} fichier(s) temporaire(s) purgé(s)");
+            }
             // Rejeu du journal de récupération avant toute interaction : une
             // entrée confirmée à l'écran avant un arrêt brutal revient dans sa
             // note ici, sans doublon.
@@ -44,6 +50,8 @@ pub fn run() {
             commands::append_to_today_note,
             commands::start_capture,
             commands::stop_capture,
+            commands::pause_capture,
+            commands::resume_capture,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de l'application Écho");

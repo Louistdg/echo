@@ -44,7 +44,7 @@ echo/
         ├── shortcuts.rs           # Ctrl+Alt+Espace → fenêtre dictée
         ├── commands/mod.rs       # commandes IPC (get_status, settings, notes)
         ├── notes/mod.rs          # note du jour + écriture atomique
-        ├── capture/mod.rs        # SQUELETTE — TODO v1 (cpal, VU-mètre)
+        ├── capture/mod.rs        # M2 — micro cpal, WAV 16 kHz mono, VU-mètre
         ├── transcription/mod.rs  # SQUELETTE — trait TranscriptionEngine
         └── watcher/mod.rs        # SQUELETTE — TODO v2 (notify)
 ```
@@ -56,14 +56,15 @@ echo/
 - Raccourci global `Ctrl+Alt+Espace` : affiche/masque la fenêtre de dictée.
 - Choix du dossier de notes (dialogue natif), persisté dans `settings.json` (répertoire applicatif).
 - Ajout d'une entrée horodatée à la note du jour `AAAA-MM-JJ.md` (création + écriture atomique).
+- **Journal de récupération** append-only avec `fsync` avant écriture, rejeu idempotent au démarrage (M1).
+- **Capture audio** `cpal` : WAV 16 kHz mono par conversion logicielle, VU-mètre `capture:level`, pause/reprise, purge des temporaires (M2).
 - UI française honnête : les modules non implémentés sont signalés (`get_status`), aucun faux succès.
 
 ## Prochaines étapes (v1)
 
-1. Module `capture` : micro via `cpal`, WAV 16 kHz mono, événements `capture:level`.
-2. Module `transcription` : `whisper-server` (whisper.cpp) en processus séparé, boucle locale, port aléatoire.
-3. Journal de récupération append-only avant chaque écriture (§3.5 du plan).
-4. Arrêt automatique au silence (VAD Silero côté moteur).
+1. Module `transcription` : `whisper-server` (whisper.cpp) en processus séparé, boucle locale, port aléatoire.
+2. Arrêt automatique au silence (VAD Silero côté moteur).
+3. Dictée vers d'autres applications (trois stratégies du plan §4.3).
 
 Voir le plan d'architecture complet pour les 38 fonctionnalités et la roadmap v1 → v5.
 

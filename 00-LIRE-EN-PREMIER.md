@@ -126,9 +126,10 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 | Journal de récupération, écriture atomique, BOM | vérifié (M1) |
 | Icône du tray visible | vérifié : `Écho — notes vocales`, `SystemTray.NormalButton` |
 | Menu du tray : « Ouvrir Écho », « Nouvelle dictée », « Quitter » | menu s'ouvre (fenêtre `#32768` du processus), **entrées non activées** |
-| Clics dans l'interface | non testés par injection (bureau occupé) — IPC testé par CDP |
+| Clics dans l'interface | non testés par injection (bureau occupé) — IPC et bouton testés par CDP |
 | Disque plein | non simulé |
-| Capture audio, transcription | absents (M2, M3) |
+| Capture audio | vérifiée (M2) : WAV 16 kHz mono, niveaux, pause, purge |
+| Transcription | absente (M3) |
 
 ## Journal
 
@@ -136,9 +137,25 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 - 19/10/2026 19:04 : squelette lancé, fenêtres / tray / raccourci mesurés, IPC vérifié.
 - 19/10/2026 19:30 : M1 livrée — journal, atomicité, BOM, 16 tests, test de 100 entrées
   avec 17 puis 21 arrêts brutaux : 100/100, 0 doublon.
+- 19/10/2026 21:15 : M2 livrée — capture `cpal`, WAV 16 kHz mono, 22 tests, 10 s mesurées,
+  pause 4,05 s sur 6 s, purge après `taskkill`, tracé RMS fourni.
 
-## Prochaine étape (M2, non commencée)
+## M2 — Capture audio (livrée le 19/10/2026)
 
-Module capture `cpal` : micro, WAV 16 kHz mono par conversion (pas imposé au périphérique),
-VU-mètre `capture:level`, pause/reprise. Aucune transcription avant que l'enregistrement
-soit prouvé propre.
+Détail complet et preuves : `docs/MISSIONS.md`. Résumé mesuré :
+
+- WAV réel de 10 s : 160 425 échantillons, 320 894 octets = 44 + 320 850, en-tête
+  RIFF/WAVE, 1 canal, 16 000 Hz, 16 bits.
+- `capture:level` : 247 événements sur 10 s, aucun après l'arrêt.
+- Pause 2 s au milieu : 4,05 s enregistrées pour 6 s écoulées.
+- `taskkill` en cours : WAV laissé, purgé au redémarrage suivant.
+- RMS : silence 0,00078 ; ton 1 kHz 0,00295. Tracé `docs/captures/rms-silence-vs-ton.png`.
+
+Limite à ne pas oublier : aucun locuteur n'était disponible, le signal de test est un ton
+joué par les haut-parleurs ; le couplage acoustique est faible.
+
+## Prochaine étape (M3, non commencée)
+
+VAD côté capture, puis `whisper-server` dans un processus isolé avec le modèle `small`
+multilingue. Détail : `docs/MISSIONS.md`.
+

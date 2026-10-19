@@ -190,17 +190,37 @@ pub fn replay_into(root: &Path, journal: &Journal) -> Result<usize, String> {
     Ok(n)
 }
 
-/// Démarre une session de capture micro. NON IMPLÉMENTÉ — retourne une erreur
-/// explicite (aucun faux succès).
-#[tauri::command]
-pub fn start_capture() -> Result<(), String> {
-    Err("capture audio non implémentée (TODO v1 — module capture/cpal)".into())
+/// Niveau sonore poussé vers l'UI (~30 Hz pendant l'enregistrement).
+#[derive(Serialize, Clone)]
+pub struct LevelPayload {
+    pub rms: f32,
 }
 
-/// Arrête la session de capture en cours. NON IMPLÉMENTÉ.
+/// Démarre la capture micro. Échoue explicitement si aucun micro, si le
+/// périphérique refuse l'accès, ou si une capture est déjà en cours.
 #[tauri::command]
-pub fn stop_capture() -> Result<(), String> {
-    Err("capture audio non implémentée (TODO v1 — module capture/cpal)".into())
+pub fn start_capture(app: AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+    let handle = app.clone();
+    crate::capture::start(move |rms| {
+        let _ = handle.emit("capture:level", LevelPayload { rms });
+    })
+}
+
+/// Arrête la capture, finalise le WAV et retourne son emplacement et sa durée.
+#[tauri::command]
+pub fn stop_capture() -> Result<crate::capture::CaptureInfo, String> {
+    crate::capture::stop()
+}
+
+#[tauri::command]
+pub fn pause_capture() -> Result<(), String> {
+    crate::capture::pause()
+}
+
+#[tauri::command]
+pub fn resume_capture() -> Result<(), String> {
+    crate::capture::resume()
 }
 
 #[cfg(test)]
