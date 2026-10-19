@@ -55,6 +55,7 @@ pub fn run() {
             commands::get_settings,
             commands::select_notes_folder,
             commands::append_to_today_note,
+            commands::transcribe_and_append,
             commands::start_capture,
             commands::stop_capture,
             commands::pause_capture,

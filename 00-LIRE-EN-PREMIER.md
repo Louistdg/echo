@@ -145,6 +145,9 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 - 19/10/2026 23:10 : M2.1 — audio rangé dans `<notes>/.echo/audio/` (les WAV finalisés
   ne sont plus purgés), historique cliquable, boutons « Ouvrir le dossier », panneau
   flottant déplaçable / épinglable / trois thèmes.
+- 19/10/2026 23:20 : M3 (pipeline) — moteur remplaçable `WhisperCli`, commande
+  `transcribe_and_append`, bouton « → note ». Vérifié en bout en bout avec un moteur
+  de test. Reste : un binaire + un modèle whisper réels.
 
 ## M2 — Capture audio (livrée le 19/10/2026)
 

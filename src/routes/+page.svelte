@@ -68,6 +68,20 @@
     }
   }
 
+  async function transcrire(path: string) {
+    try {
+      const r = await invoke<{ text: string; path: string; state: string }>(
+        "transcribe_and_append",
+        { path },
+      );
+      message = `Transcrit et ajouté à la note — ${r.path}`;
+      enErreur = false;
+    } catch (e) {
+      message = `Transcription impossible — ${String(e)}`;
+      enErreur = true;
+    }
+  }
+
   function duree(s: number) {
     const m = Math.floor(s / 60);
     return m > 0 ? `${m} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${s.toFixed(1)} s`;
@@ -159,10 +173,13 @@
     {:else}
       <ul>
         {#each enregistrements as e (e.path)}
-          <li>
+          <li class="ligne-li">
             <button class="ligne" onclick={() => ouvrirEnregistrement(e.path)} title={e.path}>
               <span class="nom">{e.name}</span>
               <span class="meta">{duree(e.duration_secs)} · {e.modified}</span>
+            </button>
+            <button class="transcrire" onclick={() => transcrire(e.path)} title="Transcrire et ajouter à la note du jour">
+              → note
             </button>
           </li>
         {/each}
@@ -315,7 +332,8 @@
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: 0.5rem 0.75rem;
     border: none;
     background: #fff;
@@ -325,6 +343,32 @@
   }
 
   .ligne:hover {
+    background: #eef4ff;
+  }
+
+  .ligne-li {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .ligne-li + .ligne-li {
+    border-top: 1px solid #ececf2;
+  }
+
+  .transcrire {
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0 0.9rem;
+    border: none;
+    border-left: 1px solid #ececf2;
+    background: #fff;
+    color: #2d6cdf;
+    cursor: pointer;
+  }
+
+  .transcrire:hover {
     background: #eef4ff;
   }
 

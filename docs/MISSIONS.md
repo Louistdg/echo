@@ -116,18 +116,32 @@ Tracé : `docs/captures/rms-silence-vs-ton.png` (données brutes :
 **Objectif.** Transformer un WAV 16 kHz mono en texte, hors ligne, sans bloquer
 l'interface et sans jamais perdre l'audio en cas de panne du moteur.
 
-**À construire.**
+**Livré (pipeline) — 19/10/2026.**
 
-- VAD côté capture (Silero ou équivalent) pour couper les silences et arrêter
-  l'enregistrement après N secondes de silence.
-- `whisper-server` (whisper.cpp) lancé dans un **processus isolé**, écoute sur
-  `127.0.0.1` avec port aléatoire, une requête à la fois, file d'attente
-  sérialisée par le cœur Rust.
-- Modèle `small` multilingue, langue `fr` par défaut, téléchargement unique avec
-  vérification SHA-256.
-- En cas de plantage du moteur : redémarrage automatique, message explicite,
-  aucun WAV supprimé avant transcription réussie.
-- `transcription:progress`, `transcription:done`, `transcription:error` vers l'UI.
+- Trait `TranscriptionEngine` (moteur remplaçable) + implémentation `WhisperCli` :
+  lance whisper.cpp en processus isolé (`-m <modèle> -f <wav> -otxt -l fr -nt`),
+  lit le `.txt`, nettoie. Erreurs explicites : binaire absent, modèle absent,
+  audio absent.
+- Commande `transcribe_and_append` : valide que le fichier est un enregistrement
+  d'Écho, transcrit, puis ajoute le texte à la note du jour par le chemin sûr
+  (journal → note → done) avec un identifiant dérivé du nom de fichier.
+  Retranscrire ne duplique pas.
+- Réglages `whisper_bin` / `whisper_model` dans `settings.json` ; bouton « → note »
+  sur chaque enregistrement de l'historique.
+- Vérifié en bout en bout avec un moteur de test : `transcribe_and_append` →
+  `{"text":"texte transcrit…","state":"enregistré"}` ; 1 occurrence après deux
+  appels (idempotence). `cargo test` : 31 tests.
+
+**Reste à faire (le vrai modèle).**
+
+- Fournir un binaire whisper.cpp (`whisper-cli.exe`) et un modèle (commencer par
+  `tiny` ~75 Mo pour valider, puis `small` multilingue ~466 Mo), et renseigner
+  `whisper_bin` / `whisper_model`.
+- `whisper-server` résident + file d'attente + redémarrage automatique (remplace
+  le CLI un-coup) : le plan §2.3 les prévoit pour l'annulation et la progression.
+- VAD côté capture (arrêt au silence).
+- Critères restants : un WAV de 10 s de parole réelle → texte < 5 s ; tuer le
+  moteur → relance et WAV retranscrit ; aucune donnée ne quitte la machine.
 
 **Hors périmètre M3.** Nettoyage IA, dictée vers d'autres applications, cloud.
 

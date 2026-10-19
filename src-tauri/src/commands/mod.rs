@@ -12,6 +12,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::notes;
 use crate::recovery::{Entry, Journal};
+use crate::transcription::TranscriptionEngine;
 
 /// Statut des modules — affiché dans l'UI pour être transparent sur l'avancement.
 #[derive(Serialize)]
@@ -31,7 +32,7 @@ static RECOVERY_STATUS: std::sync::LazyLock<std::sync::Mutex<String>> =
 pub fn get_status() -> ModuleStatus {
     ModuleStatus {
         capture_audio: "capture OK (M2) — WAV 16 kHz mono",
-        transcription: "non implémenté (M3 — whisper.cpp)",
+        transcription: "moteur whisper.cpp prêt si binaire + modèle configurés dans les réglages",
         notes: "note du jour + journal de récupération (rejeu au démarrage)",
         recovery: RECOVERY_STATUS
             .lock()
@@ -44,6 +45,8 @@ pub fn get_status() -> ModuleStatus {
 #[derive(Default, Serialize, Deserialize)]
 pub struct Settings {
     pub notes_dir: Option<PathBuf>,
+    pub whisper_bin: Option<PathBuf>,
+    pub whisper_model: Option<PathBuf>,
 }
 
 /// Résultat d'un ajout : l'UI n'affiche « Enregistré » que si cette valeur est
@@ -53,6 +56,7 @@ pub struct AppendResult {
     pub id: String,
     pub path: String,
     pub state: String,
+    pub text: String,
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
@@ -130,13 +134,10 @@ pub async fn select_notes_folder(app: AppHandle) -> Result<String, String> {
 /// (3) marquage `done`. Une coupure entre (1) et (2) laisse un `pending` que le
 /// démarrage suivant rejoue ; entre (2) et (3), le marqueur d'idempotence dans la
 /// note empêche tout doublon.
-#[tauri::command]
-pub fn append_to_today_note(
-    app: AppHandle,
-    text: String,
-    entry_id: Option<String>,
-) -> Result<AppendResult, String> {
-    let settings = load_settings(&app);
+/// Cœur d'ajout, partagé par la frappe et la dictée : journal → note → done.
+/// L'identifiant est stable : rejouer ou retranscrire ne duplique pas.
+pub fn append_text(app: &AppHandle, text: &str, id: &str) -> Result<AppendResult, String> {
+    let settings = load_settings(app);
     let root = settings.notes_dir.ok_or(
         "aucun dossier de notes configuré — utilise « Choisir le dossier » d'abord",
     )?;
@@ -145,26 +146,20 @@ pub fn append_to_today_note(
     let date_str = now.format("%Y-%m-%d").to_string();
     let time_str = now.format("%H:%M").to_string();
 
-    // Identifiant d'opération : l'interface le conserve entre deux tentatives
-    // pour qu'un réessai après échec ne crée pas une seconde entrée.
-    let id = entry_id
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-    let journal = journal(&app)?;
+    let journal = journal(app)?;
     let entry = Entry::new(
-        &id,
+        id,
         &root.to_string_lossy(),
         &date_str,
         &time_str,
-        &text,
+        text,
     );
 
     journal
         .append(&entry)
         .map_err(|e| format!("journal non écrit, rien n'a été ajouté : {e}"))?;
 
-    let path = notes::append_entry(&root, &date_str, &time_str, &text, &id).map_err(|e| {
+    let path = notes::append_entry(&root, &date_str, &time_str, text, id).map_err(|e| {
         format!(
             "note non écrite, entrée conservée au journal et réessayée au prochain démarrage : {e}"
         )
@@ -176,10 +171,58 @@ pub fn append_to_today_note(
     };
 
     Ok(AppendResult {
-        id,
+        id: id.to_string(),
         path: path.to_string_lossy().into_owned(),
         state,
+        text: text.to_string(),
     })
+}
+
+#[tauri::command]
+pub fn append_to_today_note(
+    app: AppHandle,
+    text: String,
+    entry_id: Option<String>,
+) -> Result<AppendResult, String> {
+    // Identifiant d'opération : l'interface le conserve entre deux tentatives
+    // pour qu'un réessai après échec ne crée pas une seconde entrée.
+    let id = entry_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    append_text(&app, &text, &id)
+}
+
+/// Transcrit un enregistrement puis l'ajoute à la note du jour.
+/// Le texte suit le même chemin sûr que la frappe (journal → note → done),
+/// avec un identifiant dérivé du nom du fichier : retranscrire ne duplique pas.
+#[tauri::command]
+pub fn transcribe_and_append(app: AppHandle, path: String) -> Result<AppendResult, String> {
+    let settings = load_settings(&app);
+    let root = settings.notes_dir.ok_or(
+        "aucun dossier de notes configuré — utilise « Choisir le dossier » d'abord",
+    )?;
+    let rec_dir = crate::capture::recordings_dir(&root);
+    let wav = PathBuf::from(&path);
+    if !wav.starts_with(&rec_dir) {
+        return Err("ce fichier n'est pas un enregistrement d'Écho".into());
+    }
+
+    let engine = crate::transcription::WhisperCli::new(
+        settings.whisper_bin.unwrap_or_default(),
+        settings.whisper_model.unwrap_or_default(),
+    );
+    let texte = engine.transcribe(&wav)?;
+    if texte.is_empty() {
+        return Err("transcription vide — le moteur n'a rien entendu".into());
+    }
+
+    let id = format!(
+        "trans-{}",
+        wav.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    );
+    append_text(&app, &texte, &id)
 }
 
 /// Résultat d'un rejeu : combien d'entrées, et ce qui n'a pas pu être lu.
