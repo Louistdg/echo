@@ -17,6 +17,40 @@ pub trait TranscriptionEngine: Send + Sync {
     fn transcribe(&self, wav_path: &Path) -> Result<String, String>;
 }
 
+/// Nettoyage local, sans IA : suppression des hésitations, majuscules en début
+/// de phrase, espaces normalisés. Aucune reformulation — le sens est intact.
+/// C'est le « nettoyage local d'abord » du plan ; la reformulation par modèle
+/// reste un choix explicite, jamais appliquée ici.
+pub fn clean_text(raw: &str) -> String {
+    const FILLERS: &[&str] = &["euh", "hein", "ben", "hum", "genre", "bah"];
+
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    let mut gardees: Vec<&str> = Vec::with_capacity(words.len());
+    for w in words {
+        let noyau = w.trim_matches(|c: char| !c.is_alphanumeric());
+        if FILLERS.contains(&noyau.to_lowercase().as_str()) {
+            continue;
+        }
+        gardees.push(w);
+    }
+
+    let s = gardees.join(" ");
+    let mut chars: Vec<char> = s.chars().collect();
+    let mut majuscule = true;
+    for c in chars.iter_mut() {
+        if majuscule && c.is_alphabetic() {
+            if let Some(up) = c.to_uppercase().next() {
+                *c = up;
+            }
+            majuscule = false;
+        }
+        if matches!(*c, '.' | '!' | '?') {
+            majuscule = true;
+        }
+    }
+    chars.into_iter().collect()
+}
+
 /// Implémentation locale via `whisper-cli` (whisper.cpp), un processus par
 /// transcription. Les chemins du binaire et du modèle viennent des réglages.
 pub struct WhisperCli {
@@ -104,6 +138,19 @@ mod tests {
         let e = MoteurFixe("phrase transcrite".into());
         assert_eq!(e.transcribe(Path::new("x.wav")).unwrap(), "phrase transcrite");
         assert_eq!(e.name(), "moteur de test");
+    }
+
+    #[test]
+    fn le_nettoyage_retire_les_hesitations_et_met_des_majuscules() {
+        assert_eq!(
+            clean_text("euh bonjour. hein ceci est un test"),
+            "Bonjour. Ceci est un test"
+        );
+        assert_eq!(
+            clean_text("  du   texte   genre  melange  "),
+            "Du texte melange"
+        );
+        assert_eq!(clean_text(""), "");
     }
 
     #[test]

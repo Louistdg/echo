@@ -211,7 +211,7 @@ pub fn transcribe_and_append(app: AppHandle, path: String) -> Result<AppendResul
         settings.whisper_bin.unwrap_or_default(),
         settings.whisper_model.unwrap_or_default(),
     );
-    let texte = engine.transcribe(&wav)?;
+    let texte = crate::transcription::clean_text(&engine.transcribe(&wav)?);
     if texte.is_empty() {
         return Err("transcription vide — le moteur n'a rien entendu".into());
     }

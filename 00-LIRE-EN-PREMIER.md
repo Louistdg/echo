@@ -148,6 +148,9 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 - 19/10/2026 23:20 : M3 (pipeline) — moteur remplaçable `WhisperCli`, commande
   `transcribe_and_append`, bouton « → note ». Vérifié en bout en bout avec un moteur
   de test. Reste : un binaire + un modèle whisper réels.
+- 19/10/2026 23:30 : M3 (moteur réel) — `whisperfile` + `ggml-tiny.bin` branchés,
+  transcription réelle vérifiée ; nettoyage local des hésitations (`clean_text`).
+  32 tests.
 
 ## M2 — Capture audio (livrée le 19/10/2026)
 
@@ -182,8 +185,27 @@ Non corrigé, assumé : pas de verrou d'instance unique (deux Écho peuvent enco
 concurrencer), travail lourd encore dans le callback audio, purge des temporaires à
 revoir avec M3, sélection du micro absente.
 
-## Prochaine étape (M3, non commencée)
+## M3 — Transcription (livrée, moteur réel `tiny`)
 
-VAD côté capture, puis `whisper-server` dans un processus isolé avec le modèle `small`
-multilingue. Détail : `docs/MISSIONS.md`.
+Le pipeline est en place et vérifié de bout en bout avec un vrai moteur :
+
+- Trait `TranscriptionEngine` + implémentation `WhisperCli` (processus isolé).
+- `transcribe_and_append` : transcrit puis ajoute à la note du jour, idempotent.
+- Moteur réel testé : `whisperfile` (llamafile) + modèle `ggml-tiny.bin` (~78 Mo),
+  posés dans `tools/whisper/` (hors dépôt) et déclarés dans `settings.json`
+  (`whisper_bin`, `whisper_model`).
+- Résultat réel : « bonjour, ceci est un test de transcription vocale… » → écrit
+  dans la note avec le marqueur `trans-test-fr`, une seule occurrence après rejeu.
+
+## « Note améliorée » — nettoyage local (livré)
+
+`transcription::clean_text` : supprime les hésitations (« euh », « hein », « genre »…),
+met les majuscules en début de phrase, normalise les espaces. Aucune reformulation :
+le modèle (LLM) n'intervient que si l'utilisateur l'active explicitement — pas avant.
+
+## Prochaines étapes (après l'objectif)
+
+- Passer au modèle `small` multilingue (~466 Mo) pour la précision, et à
+  `whisper-server` résident + file d'attente + VAD (arrêt au silence) — plan §2.3/§5.
+- Verrou d'instance unique ; dictée vers d'autres applications.
 
