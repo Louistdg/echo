@@ -111,7 +111,7 @@ Tracé : `docs/captures/rms-silence-vs-ton.png` (données brutes :
   44 + 2×160 587), historique d'une entrée, `.part` purgé au redémarrage, WAV
   conservé. DOM du panneau : zone de glissement, 3 pastilles, bouton épingler.
 
-## M3 — Transcription (non commencée)
+## M3 — Transcription (livrée le 19/10/2026, moteur réel `tiny`)
 
 **Objectif.** Transformer un WAV 16 kHz mono en texte, hors ligne, sans bloquer
 l'interface et sans jamais perdre l'audio en cas de panne du moteur.
@@ -128,20 +128,26 @@ l'interface et sans jamais perdre l'audio en cas de panne du moteur.
   Retranscrire ne duplique pas.
 - Réglages `whisper_bin` / `whisper_model` dans `settings.json` ; bouton « → note »
   sur chaque enregistrement de l'historique.
-- Vérifié en bout en bout avec un moteur de test : `transcribe_and_append` →
-  `{"text":"texte transcrit…","state":"enregistré"}` ; 1 occurrence après deux
-  appels (idempotence). `cargo test` : 31 tests.
+- `clean_text` : nettoyage local (hésitations, majuscules, espaces), sans IA.
 
-**Reste à faire (le vrai modèle).**
+**Livré (moteur réel) — 19/10/2026, 23:30.**
 
-- Fournir un binaire whisper.cpp (`whisper-cli.exe`) et un modèle (commencer par
-  `tiny` ~75 Mo pour valider, puis `small` multilingue ~466 Mo), et renseigner
-  `whisper_bin` / `whisper_model`.
+- Moteur : `whisperfile` (llamafile 0.10.6, exécutable portable, 5,5 Mo) et
+  modèle `ggml-tiny.bin` (77,7 Mo), posés dans `tools/whisper/` (hors dépôt).
+- Vérification réelle : un WAV de parole française synthétisée a été transcrit —
+  « bonjour, ceci est un test de transcription vocale. Cette application
+  enregistre ma voix… » — puis écrit dans la note avec le marqueur
+  `trans-test-fr`, une seule occurrence après rejeu. 32 tests au total.
+
+**Reste à faire (qualité et robustesse).**
+
+- Passer au modèle `small` multilingue (~466 Mo) : le `tiny` fait des fautes
+  (« puisse écrire » au lieu de « puis écrit »).
 - `whisper-server` résident + file d'attente + redémarrage automatique (remplace
   le CLI un-coup) : le plan §2.3 les prévoit pour l'annulation et la progression.
 - VAD côté capture (arrêt au silence).
-- Critères restants : un WAV de 10 s de parole réelle → texte < 5 s ; tuer le
-  moteur → relance et WAV retranscrit ; aucune donnée ne quitte la machine.
+- Critères restants : un WAV de 10 s de **voix humaine réelle** → texte < 5 s ;
+  tuer le moteur → relance et WAV retranscrit ; aucune donnée ne quitte la machine.
 
 **Hors périmètre M3.** Nettoyage IA, dictée vers d'autres applications, cloud.
 

@@ -57,14 +57,18 @@ echo/
 - Choix du dossier de notes (dialogue natif), persisté dans `settings.json` (répertoire applicatif).
 - Ajout d'une entrée horodatée à la note du jour `AAAA-MM-JJ.md` (création + écriture atomique).
 - **Journal de récupération** append-only avec `fsync` avant écriture, rejeu idempotent au démarrage (M1).
-- **Capture audio** `cpal` : WAV 16 kHz mono par conversion logicielle, VU-mètre `capture:level`, pause/reprise, purge des temporaires (M2).
+- **Capture audio** `cpal` : WAV 16 kHz mono par conversion logicielle, VU-mètre `capture:level`, pause/reprise, audio rangé dans `<notes>/.echo/audio/` (M2/M2.1).
+- **Panneau flottant** déplaçable, épinglable, trois thèmes, historique cliquable (M2.1).
+- **Transcription** : moteur remplaçable (`WhisperCli`), commande `transcribe_and_append`, bouton « → note », moteur réel `whisperfile` + modèle `ggml-tiny.bin` (M3).
+- **Nettoyage local** du texte : hésitations retirées, majuscules, espaces — sans IA (M3).
 - UI française honnête : les modules non implémentés sont signalés (`get_status`), aucun faux succès.
 
 ## Prochaines étapes (v1)
 
-1. Module `transcription` : `whisper-server` (whisper.cpp) en processus séparé, boucle locale, port aléatoire.
-2. Arrêt automatique au silence (VAD Silero côté moteur).
-3. Dictée vers d'autres applications (trois stratégies du plan §4.3).
+1. Modèle `small` multilingue (~466 Mo) au lieu de `tiny`.
+2. `whisper-server` (whisper.cpp) résident en processus séparé + file d'attente.
+3. Arrêt automatique au silence (VAD Silero côté moteur).
+4. Dictée vers d'autres applications (trois stratégies du plan §4.3).
 
 Voir le plan d'architecture complet pour les 38 fonctionnalités et la roadmap v1 → v5.
 

@@ -5,18 +5,21 @@ Créé le 19/10/2026 sous le nom BOCNOT, renommé **Écho** le même jour.
 Chemin : `D:\DSH\default-workspace\Écho`.
 
 **Dépôt public : <https://github.com/Louistdg/echo>** (branche `main`).
-Les missions (M1 terminée, M2 à venir) sont décrites dans `docs/MISSIONS.md`.
+**Reprise rapide : [`docs/REPRISE.md`](docs/REPRISE.md)** — une page : état, chemins,
+ce qui reste, points à trancher. Les missions détaillées sont dans `docs/MISSIONS.md`.
 
 ## Fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `00-LIRE-EN-PREMIER.md` | ce fichier : état vérifié, commandes, limites, suite |
+| `docs/REPRISE.md` | **dossier de reprise** : tout l'état en une page |
 | `01-PROMPT-A-COLLER-SOCLE.txt` | contrat de travail (méthode), recopié octet pour octet — voir la réserve plus bas |
 | `README.md` | README du squelette + écart structurel avec le plan |
 | `docs/architecture.md` | plan d'architecture v1.0 |
-| `docs/MISSIONS.md` | M1 (livrée, avec preuves) et M2 (capture audio) |
-| `tests/manuel/` | harnais de test M1 (kill-test, ui-message) |
+| `docs/PROMPT-ECHO.md` | prompt de présentation du projet |
+| `docs/MISSIONS.md` | M1, M1.1, M2, M2.1, M3 (avec preuves) |
+| `tests/manuel/` | harnais de test (kill-test, m2-suite, ui-message) |
 | `src-tauri/src/recovery.rs` | journal de récupération append-only |
 | `src-tauri/src/atomic.rs` | écriture atomique (fichier temporaire + `ReplaceFileW`) |
 | `src/`, `src-tauri/`, `static/` | le reste du code |
@@ -151,6 +154,9 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
 - 19/10/2026 23:30 : M3 (moteur réel) — `whisperfile` + `ggml-tiny.bin` branchés,
   transcription réelle vérifiée ; nettoyage local des hésitations (`clean_text`).
   32 tests.
+- 20/10/2026 00:30 : logo mascotte (teckel briné + bouclier) recadré depuis
+  `bbdamour`, installé **en local** dans `src-tauri/icons` — **non poussé** sur le
+  dépôt public (en attente de décision).
 
 ## M2 — Capture audio (livrée le 19/10/2026)
 
