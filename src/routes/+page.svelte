@@ -69,7 +69,7 @@
 <main>
   <header>
     <h1>Écho</h1>
-    <p class="sous-titre">Bloc-notes vocal local — squelette initial</p>
+    <p class="sous-titre">Bloc-notes vocal local — enregistrement prêt, transcription à venir</p>
   </header>
 
   <section class="dossier">
@@ -84,7 +84,7 @@
   <section class="editeur">
     <textarea
       bind:value={texte}
-      placeholder="Écris ici… (la dictée vocale arrive en v1 — module capture)"
+      placeholder="Écris ici… (Ctrl+Alt+Espace ouvre la fenêtre d'enregistrement)"
       rows="10"
     ></textarea>
     <div class="actions">
