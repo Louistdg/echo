@@ -147,7 +147,19 @@ pub fn resume() -> Result<(), String> {
 }
 
 pub fn is_running() -> bool {
-    SESSION.lock().map(|s| s.is_some()).unwrap_or(false)
+    let Ok(mut slot) = SESSION.lock() else {
+        return false;
+    };
+    if let Some(active) = slot.as_ref() {
+        // Le fil peut s'être arrêté sur une erreur de périphérique sans que
+        // `stop` ait été appelé : la session ne doit pas rester « en cours ».
+        if active.join.is_finished() {
+            slot.take();
+            return false;
+        }
+        return true;
+    }
+    false
 }
 
 /// Corps du fil de capture. Le flux cpal reste dans ce fil (il n'est pas
@@ -182,11 +194,15 @@ fn run(
             .map_err(|e| format!("impossible de créer le WAV temporaire : {e}"))?,
     )));
     let written = Arc::new(AtomicU64::new(0));
+    // Une erreur d'écriture disque dans le callback ne doit pas être avalée :
+    // sans cela, l'arrêt rendrait « succès » sur un WAV tronqué.
+    let write_error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
     let cb_stop = stop.clone();
     let cb_conv = converter.clone();
     let cb_writer = writer.clone();
     let cb_written = written.clone();
+    let cb_ecriture = write_error.clone();
     let mut last_emit = Instant::now();
 
     let mut on_audio = move |data: &[f32]| {
@@ -203,7 +219,11 @@ fn run(
         if let Ok(mut guard) = cb_writer.lock() {
             if let Some(w) = guard.as_mut() {
                 for s in &out {
-                    if w.write_sample(*s).is_err() {
+                    if let Err(e) = w.write_sample(*s) {
+                        if let Ok(mut slot) = cb_ecriture.lock() {
+                            *slot = Some(format!("écriture du WAV impossible : {e}"));
+                        }
+                        cb_stop.store(true, Ordering::Relaxed);
                         return;
                     }
                 }
@@ -284,7 +304,11 @@ fn run(
 
     drop(stream);
 
-    let device_error = err_flag.lock().ok().and_then(|s| s.clone());
+    let erreur = err_flag
+        .lock()
+        .ok()
+        .and_then(|s| s.clone())
+        .or_else(|| write_error.lock().ok().and_then(|s| s.clone()));
     let samples = written.load(Ordering::Relaxed);
 
     let w = {
@@ -294,8 +318,8 @@ fn run(
     w.finalize()
         .map_err(|e| format!("finalisation du WAV impossible : {e}"))?;
 
-    if let Some(e) = device_error {
-        return Err(format!("micro interrompu : {e}"));
+    if let Some(e) = erreur {
+        return Err(format!("capture interrompue : {e}"));
     }
 
     Ok(CaptureInfo {
@@ -331,6 +355,59 @@ pub struct Converter {
     step: f64,
     buffer: Vec<f32>,
     pos: f64,
+    filtres: Vec<Biquad>,
+}
+
+/// Filtre passe-bas biquad (RBJ), appliqué avant la décimation.
+///
+/// Sans lui, un signal 48 kHz réduit à 16 kHz replie tout ce qui dépasse 8 kHz
+/// dans la bande utile (un sifflement à 12 kHz devient un bourdonnement à
+/// 4 kHz). L'interpolation seule ne filtre pas. Deux étages en cascade pour
+/// une pente de 24 dB/octave.
+struct Biquad {
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+}
+
+impl Biquad {
+    fn passe_bas(freq: f32, sr: f32) -> Self {
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let (sin, cos) = (w0.sin(), w0.cos());
+        let alpha = sin / (2.0 * 0.707);
+        let b0 = (1.0 - cos) / 2.0;
+        let b1 = 1.0 - cos;
+        let b2 = (1.0 - cos) / 2.0;
+        let a0 = 1.0 + alpha;
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: (-2.0 * cos) / a0,
+            a2: (1.0 - alpha) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        }
+    }
+
+    fn process(&mut self, x: f32) -> f32 {
+        let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
+        self.x2 = self.x1;
+        self.x1 = x;
+        self.y2 = self.y1;
+        self.y1 = y;
+        y
+    }
 }
 
 impl Converter {
@@ -340,6 +417,14 @@ impl Converter {
             step: in_rate as f64 / TARGET_RATE as f64,
             buffer: Vec::with_capacity(4096),
             pos: 0.0,
+            filtres: if in_rate > TARGET_RATE {
+                vec![
+                    Biquad::passe_bas(7_200.0, in_rate as f32),
+                    Biquad::passe_bas(7_200.0, in_rate as f32),
+                ]
+            } else {
+                Vec::new()
+            },
         }
     }
 
@@ -348,7 +433,11 @@ impl Converter {
     pub fn push(&mut self, interleaved: &[f32]) -> Vec<i16> {
         for frame in interleaved.chunks_exact(self.channels) {
             let sum: f32 = frame.iter().sum();
-            self.buffer.push(sum / self.channels as f32);
+            let mut mono = sum / self.channels as f32;
+            for f in &mut self.filtres {
+                mono = f.process(mono);
+            }
+            self.buffer.push(mono);
         }
 
         let mut out = Vec::new();
@@ -467,6 +556,24 @@ mod tests {
         let faible: Vec<i16> = vec![300; 1000];
         assert!(rms(&fort) > 0.4);
         assert!(rms(&faible) < 0.02);
+    }
+
+    #[test]
+    fn un_ton_aigu_est_attenue_avant_la_decimation() {
+        // Sans filtre, 12 kHz à 48 kHz se replie à 4 kHz à 16 kHz et reste
+        // presque aussi fort que le 1 kHz. Avec le passe-bas, il doit chuter.
+        let mut aigu = Converter::new(1, 48_000);
+        let sortie_aigu = aigu.push(&onde(48_000, 1.0, 1, 12_000.0));
+        let mut grave = Converter::new(1, 48_000);
+        let sortie_grave = grave.push(&onde(48_000, 1.0, 1, 1_000.0));
+
+        let r_aigu = rms(&sortie_aigu);
+        let r_grave = rms(&sortie_grave);
+        assert!(r_grave > 0.30, "le 1 kHz doit passer (rms {r_grave})");
+        assert!(
+            r_aigu < r_grave * 0.2,
+            "le 12 kHz doit être atténué : {r_aigu} contre {r_grave}"
+        );
     }
 
     #[test]

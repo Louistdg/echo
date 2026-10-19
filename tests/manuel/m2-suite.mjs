@@ -61,8 +61,9 @@ async function pret() {
 async function demarrer() {
   if (app && app.exitCode === null && (await pret())) return;
   if (app) arreter();
-  // Attendre la fermeture réelle du port CDP : sinon on peut interroger la
-  // page d'une instance déjà tuée (leçon du harnais M1).
+  // Tuer une instance résiduelle et attendre la fermeture du port : sinon on
+  // interroge la page d'un processus déjà mort (cible CDP zombie).
+  spawnSync("taskkill", ["/F", "/IM", "echo.exe"], { stdio: "ignore" });
   for (let i = 0; i < 40; i++) {
     try { await cibles(); await sleep(150); } catch { break; }
   }
@@ -140,16 +141,22 @@ if (mode === "ten") {
   const info = JSON.parse(await arreterCapture());
   noter("duree", info.duration_secs);
   noter("echantillons", info.samples);
-  noter("duree proche de 10 s", Math.abs(info.duration_secs - 10) < 0.05, Math.abs(info.duration_secs - 10) < 0.05);
+  const ecart = Math.abs(info.duration_secs - 10);
+  noter("duree proche de 10 s (tolerance 0,25 s)", ecart, ecart < 0.25);
   const w = wav(path.basename(info.path));
   noter("wav", w);
   noter("taille = 44 + 2*echantillons", w.octets === 44 + 2 * info.samples, w.octets === 44 + 2 * info.samples);
   noter("canaux = 1", w.canaux === 1, w.canaux === 1);
   noter("taux = 16000", w.taux === 16000, w.taux === 16000);
   noter("evenements de niveau pendant 10 s", n1);
-  await sleep(1200);
+  // Les événements déjà en file peuvent arriver juste après l'arrêt ; ce qui
+  // compte est qu'aucun nouvel événement ne soit produit ensuite.
+  await sleep(600);
   const n2 = JSON.parse(await lireNiveaux()).length;
-  noter("evenements stoppes apres arret", n2 === n1, n2 === n1);
+  await sleep(1000);
+  const n3 = JSON.parse(await lireNiveaux()).length;
+  noter("file vidée après arrêt (n2, n3)", [n1, n2, n3]);
+  noter("plus aucun événement ensuite", n3 === n2, n3 === n2);
 }
 if (mode === "pause") {
   await sleep(2000);

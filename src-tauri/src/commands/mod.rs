@@ -19,14 +19,24 @@ pub struct ModuleStatus {
     pub capture_audio: &'static str,
     pub transcription: &'static str,
     pub notes: &'static str,
+    /// Résumé de la dernière récupération de journal (vide si tout va bien).
+    pub recovery: String,
 }
+
+/// Dernier état de récupération, lisible par l'UI.
+static RECOVERY_STATUS: std::sync::LazyLock<std::sync::Mutex<String>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(String::new()));
 
 #[tauri::command]
 pub fn get_status() -> ModuleStatus {
     ModuleStatus {
-        capture_audio: "non implémenté (TODO v1 — module cpal)",
-        transcription: "non implémenté (TODO v1 — whisper.cpp)",
+        capture_audio: "capture OK (M2) — WAV 16 kHz mono",
+        transcription: "non implémenté (M3 — whisper.cpp)",
         notes: "note du jour + journal de récupération (rejeu au démarrage)",
+        recovery: RECOVERY_STATUS
+            .lock()
+            .map(|s| s.clone())
+            .unwrap_or_default(),
     }
 }
 
@@ -121,7 +131,11 @@ pub async fn select_notes_folder(app: AppHandle) -> Result<String, String> {
 /// démarrage suivant rejoue ; entre (2) et (3), le marqueur d'idempotence dans la
 /// note empêche tout doublon.
 #[tauri::command]
-pub fn append_to_today_note(app: AppHandle, text: String) -> Result<AppendResult, String> {
+pub fn append_to_today_note(
+    app: AppHandle,
+    text: String,
+    entry_id: Option<String>,
+) -> Result<AppendResult, String> {
     let settings = load_settings(&app);
     let root = settings.notes_dir.ok_or(
         "aucun dossier de notes configuré — utilise « Choisir le dossier » d'abord",
@@ -130,19 +144,31 @@ pub fn append_to_today_note(app: AppHandle, text: String) -> Result<AppendResult
     let now = chrono::Local::now();
     let date_str = now.format("%Y-%m-%d").to_string();
     let time_str = now.format("%H:%M").to_string();
-    let id = uuid::Uuid::new_v4().to_string();
+
+    // Identifiant d'opération : l'interface le conserve entre deux tentatives
+    // pour qu'un réessai après échec ne crée pas une seconde entrée.
+    let id = entry_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let journal = journal(&app)?;
-    let entry = Entry::new(&id, &date_str, &time_str, &text);
+    let entry = Entry::new(
+        &id,
+        &root.to_string_lossy(),
+        &date_str,
+        &time_str,
+        &text,
+    );
 
     journal
         .append(&entry)
         .map_err(|e| format!("journal non écrit, rien n'a été ajouté : {e}"))?;
 
-    let path = notes::append_entry(&root, &date_str, &time_str, &text, &id)
-        .map_err(|e| {
-            format!("note non écrite, entrée conservée au journal et réessayée au prochain démarrage : {e}")
-        })?;
+    let path = notes::append_entry(&root, &date_str, &time_str, &text, &id).map_err(|e| {
+        format!(
+            "note non écrite, entrée conservée au journal et réessayée au prochain démarrage : {e}"
+        )
+    })?;
 
     let state = match journal.mark_done(&entry) {
         Ok(()) => "enregistré".to_string(),
@@ -156,38 +182,98 @@ pub fn append_to_today_note(app: AppHandle, text: String) -> Result<AppendResult
     })
 }
 
-/// Rejoue au démarrage les entrées `pending`, puis compacte le journal.
-/// Retourne le nombre d'entrées rejouées.
-pub fn replay_pending(app: &AppHandle) -> Result<usize, String> {
-    let Some(root) = load_settings(app).notes_dir else {
-        return Ok(0);
-    };
-    replay_into(&root, &journal(app)?)
+/// Résultat d'un rejeu : combien d'entrées, et ce qui n'a pas pu être lu.
+#[derive(Debug, Default, Serialize)]
+pub struct ReplayReport {
+    pub rejouees: usize,
+    pub lignes_invalides: usize,
+    pub fin_reparee: bool,
+    pub compaction_refusee: bool,
+    pub erreur: Option<String>,
 }
 
-/// Cœur du rejeu, sans dépendance à Tauri (donc testable) : applique les
-/// entrées `pending` au dossier `root`, marque chacune `done`, et compacte.
-///
-/// Idempotent : `notes::append_entry` ne réécrit pas une entrée dont le
-/// marqueur est déjà présent. Rejouer deux fois ne duplique rien.
-pub fn replay_into(root: &Path, journal: &Journal) -> Result<usize, String> {
-    let pending = journal.pending();
-    let mut n = 0;
+impl ReplayReport {
+    pub fn resume(&self) -> String {
+        if let Some(e) = &self.erreur {
+            return format!("journal illisible — récupération à faire : {e}");
+        }
+        if self.lignes_invalides > 0 {
+            return format!(
+                "{} ligne(s) de journal illisible(s) — compaction bloquée, récupération à faire",
+                self.lignes_invalides
+            );
+        }
+        if self.compaction_refusee {
+            return "compaction du journal refusée — récupération à faire".into();
+        }
+        if self.fin_reparee {
+            return "journal réparé (écriture interrompue) — sauvegarde conservée".into();
+        }
+        String::new()
+    }
+}
 
-    for entry in &pending {
-        notes::append_entry(root, &entry.note, &entry.time, &entry.text, &entry.id)
-            .map_err(|e| format!("rejeu impossible pour {} : {e}", entry.id))?;
-        let _ = journal.mark_done(entry);
-        n += 1;
+/// Rejoue au démarrage les entrées `pending`, puis compacte le journal.
+pub fn replay_pending(app: &AppHandle) -> Result<ReplayReport, String> {
+    let Some(root) = load_settings(app).notes_dir else {
+        return Ok(ReplayReport::default());
+    };
+    let rapport = replay_into(&root, &journal(app)?)?;
+    let resume = rapport.resume();
+    if let Ok(mut slot) = RECOVERY_STATUS.lock() {
+        *slot = resume;
+    }
+    Ok(rapport)
+}
+
+/// Cœur du rejeu, sans dépendance à Tauri (donc testable).
+///
+/// Chaque entrée est rejouée **dans le dossier qu'elle a journalisé**, pas dans
+/// le dossier configuré au moment du redémarrage. Idempotent :
+/// `notes::append_entry` ne réécrit pas une entrée dont le marqueur est présent.
+pub fn replay_into(root: &Path, journal: &Journal) -> Result<ReplayReport, String> {
+    let mut rapport = ReplayReport::default();
+
+    if journal.reparer_fin_tronquee().unwrap_or(false) {
+        rapport.fin_reparee = true;
     }
 
-    // Compaction : 30 jours de `done`, tous les `pending` conservés.
+    let lecture = journal.read_report();
+    if let Some(e) = lecture.erreur.clone() {
+        rapport.erreur = Some(e);
+        return Ok(rapport);
+    }
+    rapport.lignes_invalides = lecture.lignes_invalides;
+
+    for entry in Journal::pending_of(&lecture) {
+        let destination = if entry.dir.trim().is_empty() {
+            root.to_path_buf()
+        } else {
+            PathBuf::from(&entry.dir)
+        };
+        notes::append_entry(
+            &destination,
+            &entry.note,
+            &entry.time,
+            &entry.text,
+            &entry.id,
+        )
+        .map_err(|e| format!("rejeu impossible pour {} : {e}", entry.id))?;
+        let _ = journal.mark_done(&entry);
+        rapport.rejouees += 1;
+    }
+
+    // Compaction : 30 jours de `done`, tous les `pending` conservés. Refusée si
+    // le journal est incomplet — l'erreur est remontée, pas avalée.
     let cutoff = (chrono::Local::now() - chrono::Duration::days(30))
         .format("%Y-%m-%d")
         .to_string();
-    let _ = journal.compact(&cutoff);
+    if let Err(e) = journal.compact(&cutoff) {
+        rapport.compaction_refusee = true;
+        eprintln!("compaction refusée : {e}");
+    }
 
-    Ok(n)
+    Ok(rapport)
 }
 
 /// Niveau sonore poussé vers l'UI (~30 Hz pendant l'enregistrement).
@@ -274,19 +360,56 @@ mod tests {
         std::fs::create_dir_all(&notes_dir).unwrap();
         let journal = Journal::new(dir.join("recovery.log"));
 
-        let e = Entry::new("id-unique", "2026-10-19", "19:07", "entrée en attente");
+        let e = Entry::new(
+            "id-unique",
+            &notes_dir.to_string_lossy(),
+            "2026-10-19",
+            "19:07",
+            "entrée en attente",
+        );
         journal.append(&e).unwrap();
 
         // La note n'existe pas : c'est le cas « supprimée pendant la coupure ».
-        assert_eq!(replay_into(&notes_dir, &journal).unwrap(), 1);
+        assert_eq!(replay_into(&notes_dir, &journal).unwrap().rejouees, 1);
         let note = std::fs::read_to_string(notes_dir.join("2026-10-19.md")).unwrap();
         assert!(note.contains("entrée en attente"));
         assert!(note.contains("<!--echo:id-unique-->"));
         assert!(journal.pending().is_empty(), "l'entrée doit être marquée done");
 
         // Deuxième rejeu : rien à faire, et surtout aucune duplication.
-        assert_eq!(replay_into(&notes_dir, &journal).unwrap(), 0);
+        assert_eq!(replay_into(&notes_dir, &journal).unwrap().rejouees, 0);
         let note = std::fs::read_to_string(notes_dir.join("2026-10-19.md")).unwrap();
         assert_eq!(note.matches("entrée en attente").count(), 1);
+    }
+
+    #[test]
+    fn le_rejeu_respecte_le_dossier_journalise_pas_le_dossier_courant() {
+        let dir = std::env::temp_dir().join(format!("echo-dest-{}", uuid::Uuid::new_v4()));
+        let dossier_a = dir.join("A");
+        let dossier_b = dir.join("B");
+        std::fs::create_dir_all(&dossier_a).unwrap();
+        std::fs::create_dir_all(&dossier_b).unwrap();
+        let journal = Journal::new(dir.join("recovery.log"));
+
+        // Entrée destinée à A, alors que l'application est reconfigurée sur B.
+        let e = Entry::new(
+            "id-a",
+            &dossier_a.to_string_lossy(),
+            "2026-10-19",
+            "19:07",
+            "destinée à A",
+        );
+        journal.append(&e).unwrap();
+
+        let rapport = replay_into(&dossier_b, &journal).unwrap();
+        assert_eq!(rapport.rejouees, 1);
+        assert!(
+            dossier_a.join("2026-10-19.md").exists(),
+            "l'entrée doit atterrir dans le dossier journalisé"
+        );
+        assert!(
+            !dossier_b.join("2026-10-19.md").exists(),
+            "elle ne doit pas atterrir dans le dossier courant"
+        );
     }
 }

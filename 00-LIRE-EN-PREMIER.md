@@ -139,6 +139,9 @@ réelle du processus après `taskkill`. La v2 passe deux fois de suite.
   avec 17 puis 21 arrêts brutaux : 100/100, 0 doublon.
 - 19/10/2026 21:15 : M2 livrée — capture `cpal`, WAV 16 kHz mono, 22 tests, 10 s mesurées,
   pause 4,05 s sur 6 s, purge après `taskkill`, tracé RMS fourni.
+- 19/10/2026 22:05 : M1.1 — corrections après revue externe : note illisible refusée,
+  conflits externes préservés, identifiant d'opération stable, dossier journalisé,
+  journal abîmé signalé, erreurs WAV remontées, anti-repliement 7,2 kHz. 28 tests.
 
 ## M2 — Capture audio (livrée le 19/10/2026)
 
@@ -153,6 +156,25 @@ Détail complet et preuves : `docs/MISSIONS.md`. Résumé mesuré :
 
 Limite à ne pas oublier : aucun locuteur n'était disponible, le signal de test est un ton
 joué par les haut-parleurs ; le couplage acoustique est faible.
+
+## M1.1 — Ce que la revue a fait changer
+
+Cinq défauts de persistance reproduits puis corrigés (détail et preuves :
+`docs/MISSIONS.md`) :
+
+1. Une note illisible était lue comme vide puis écrasée → refus explicite, fichier intact.
+2. Une modification externe était écrasée → fichier `.conflit-*.md` et erreur.
+3. Un réessai créait un doublon → identifiant d'opération stable côté UI.
+4. Le journal ne retenait pas le dossier de destination → champ `dir`, rejeu au bon endroit.
+5. Le journal était réparé en silence → lecture honnête, fin tronquée réparée avec
+   sauvegarde, compaction refusée si ligne illisible, résumé dans `get_status`.
+
+Côté capture : erreurs d'écriture WAV remontées, session libérée quand le fil meurt,
+filtre anti-repliement 4ᵉ ordre à 7,2 kHz avant décimation.
+
+Non corrigé, assumé : pas de verrou d'instance unique (deux Écho peuvent encore se
+concurrencer), travail lourd encore dans le callback audio, purge des temporaires à
+revoir avec M3, sélection du micro absente.
 
 ## Prochaine étape (M3, non commencée)
 

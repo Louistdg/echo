@@ -123,4 +123,27 @@ l'interface et sans jamais perdre l'audio en cas de panne du moteur.
   est retranscrit, pas supprimé.
 - Aucune donnée audio ne quitte la machine (vérifié par capture réseau).
 
+## M1.1 — Corrections après revue (19/10/2026)
+
+Revue externe (Codex) sur la copie locale, puis reproduction et correction.
+
+| Constat de la revue | État | Correctif et preuve |
+|---|---|---|
+| Une note illisible est lue comme vide puis écrasée | **corrigé** | `read_note` propage l'erreur (absente = vide, illisible = erreur). Test `une_note_illisible_ne_doit_pas_etre_ecrasee` : échouait avant (fichier remplacé), passe. Vérifié en réel : refus explicite, octets du fichier identiques. |
+| Modifications externes écrasées silencieusement | **partiellement corrigé** | Relecture avant remplacement ; si le contenu a changé, la version proposée part dans `note.conflit-AAAAMMJJ-HHMMSS.md` et l'appel échoue. Test `une_modification_externe_part_dans_un_fichier_de_conflit`. **Deux instances simultanées restent possibles** : pas de verrou d'instance unique. |
+| Un réessai après échec crée un doublon | **corrigé** | Identifiant d'opération fourni par l'UI (`entryId`), conservé tant que le texte est le même, libéré après succès. Vérifié en réel : deux appels avec `B-fixe` → une seule entrée. |
+| Le journal ne retient pas le dossier de destination | **corrigé** | Champ `dir` dans chaque entrée ; le rejeu écrit dans ce dossier. Test `le_rejeu_respecte_le_dossier_journalise_pas_le_dossier_courant`. |
+| Lecture du journal trop silencieuse | **corrigé** | `ReadReport` distingue absent / lisible / abîmé ; fin tronquée détectée puis réparée avec sauvegarde `recovery.corrompu-*.log` ; compaction refusée et journal sauvegardé si une ligne est illisible ; résumé affiché dans `get_status`. Tests : fin tronquée réparée, compaction refusée, ligne illisible comptée. |
+| Erreurs d'écriture WAV avalées | **corrigé** | Une erreur `write_sample` est mémorisée et `stop_capture` échoue explicitement au lieu de rendre un WAV tronqué. |
+| Session de capture « en cours » après une erreur du périphérique | **corrigé** | `is_running` détecte un fil terminé et libère la session. |
+| Rééchantillonnage sans anti-repliement | **corrigé** | Filtre biquad 4ᵉ ordre à 7,2 kHz avant décimation. Test `un_ton_aigu_est_attenue_avant_la_decimation` : un 12 kHz tombe sous 20 % du niveau d'un 1 kHz. |
+| Travail lourd dans le callback audio | **non corrigé** | À traiter en M2.1 (file bornée + débordement signalé). |
+| Purge au démarrage incompatible avec une transcription en attente | **non corrigé** | À traiter en M3 : ne purger que l'audio dont le texte est durablement enregistré. |
+| Sélection du micro absente | **non corrigé** | Une seule entrée existe sur la machine ; à faire avec l'interface de réglages. |
+| Preuve de durabilité après coupure électrique | **non établie** | `taskkill` tue un processus, pas l'alimentation. Le `fsync` est là, la preuve de bout en bout ne l'est pas. |
+| Le journal n'est pas une sauvegarde des notes effacées | **assumé** | Une entrée `done` n'est pas rejouée si la note disparaît : c'est le comportement voulu (respect d'une suppression volontaire), à documenter dans l'UI. |
+
+Tests : **28** au total après M1.1 (`cargo test`), `npm run check` à 0 erreur.
+
+
 

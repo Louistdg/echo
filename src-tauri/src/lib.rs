@@ -37,8 +37,15 @@ pub fn run() {
             // entrée confirmée à l'écran avant un arrêt brutal revient dans sa
             // note ici, sans doublon.
             match commands::replay_pending(app.handle()) {
-                Ok(0) => {}
-                Ok(n) => eprintln!("journal de récupération : {n} entrée(s) rejouée(s)"),
+                Ok(r) => {
+                    if r.rejouees > 0 {
+                        eprintln!("journal de récupération : {} entrée(s) rejouée(s)", r.rejouees);
+                    }
+                    let resume = r.resume();
+                    if !resume.is_empty() {
+                        eprintln!("journal de récupération : {resume}");
+                    }
+                }
                 Err(e) => eprintln!("rejeu du journal impossible : {e}"),
             }
             Ok(())

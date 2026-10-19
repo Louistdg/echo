@@ -6,10 +6,15 @@
   let texte = $state("");
   let message = $state("");
   let enErreur = $state(false);
+  // Identifiant d'opération stable : un réessai après échec réutilise le même
+  // identifiant, sinon le rejeu du journal créerait une seconde entrée.
+  let operationId: string | null = null;
+  let operationTexte = "";
   let statut = $state<{
     capture_audio: string;
     transcription: string;
     notes: string;
+    recovery: string;
   } | null>(null);
 
   onMount(async () => {
@@ -35,15 +40,22 @@
 
   async function ajouterALaNote() {
     if (!texte.trim()) return;
+    // Même texte + échec précédent = même opération ; texte modifié = nouvelle.
+    if (!operationId || texte !== operationTexte) {
+      operationId = crypto.randomUUID();
+      operationTexte = texte;
+    }
     try {
       // L'UI ne dit « Enregistré » que si le cœur a écrit le journal ET la note.
       const r = await invoke<{ id: string; path: string; state: string }>(
         "append_to_today_note",
-        { text: texte },
+        { text: texte, entryId: operationId },
       );
       message = `${r.state === "enregistré" ? "Enregistré" : r.state} — ${r.path}`;
       enErreur = false;
       texte = "";
+      operationId = null;
+      operationTexte = "";
       // Rafraîchit le dossier affiché : après un ajout réussi, il est forcément configuré.
       const s = await invoke<{ notes_dir: string | null }>("get_settings");
       notesDir = s.notes_dir ?? null;
@@ -92,6 +104,9 @@
         <li>Transcription : {statut.transcription}</li>
         <li>Notes : {statut.notes}</li>
       </ul>
+      {#if statut.recovery}
+        <p class="recuperation" role="alert">{statut.recovery}</p>
+      {/if}
     </footer>
   {/if}
 </main>
@@ -163,6 +178,15 @@
     background: #ffecec;
     border: 1px solid #e5a3a3;
     color: #7a1f1f;
+  }
+
+  .recuperation {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: #fff6e5;
+    border: 1px solid #e8c27a;
+    color: #6b4a00;
   }
 
   footer {
