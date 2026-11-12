@@ -231,38 +231,44 @@ impl WhisperCli {
     pub fn arguments(&self, wav_path: &Path, out_base: &Path) -> Vec<OsString> {
         let o = &self.options;
         let mut a: Vec<OsString> = Vec::with_capacity(24);
-        let mut push = |s: &str| a.push(OsString::from(s));
+        // Macro locale : la closure équivalente garderait un emprunt mutable sur `a`
+        // et empêcherait les push directs de chemins (E0499).
+        macro_rules! arg {
+            ($s:expr) => {
+                a.push(OsString::from($s))
+            };
+        }
 
-        push("-m");
+        arg!("-m");
         a.push(self.model.clone().into_os_string());
-        push("-f");
+        arg!("-f");
         a.push(wav_path.as_os_str().to_owned());
-        push("-otxt");
-        push("-of");
+        arg!("-otxt");
+        arg!("-of");
         a.push(out_base.as_os_str().to_owned());
-        push("-l");
-        push(&o.language);
+        arg!("-l");
+        arg!(o.language.as_str());
         // Pas d'horodatage : on veut du texte suivi, pas des segments.
-        push("-nt");
+        arg!("-nt");
         // Recherche par faisceau : nettement plus juste que le décodage glouton.
-        push("-bs");
-        push(&o.beam_size.to_string());
+        arg!("-bs");
+        arg!(o.beam_size.to_string());
         // Entropie haute = segment inventé : whisper le retente au lieu de l'accepter.
-        push("-et");
-        push(&o.entropy_thold.to_string());
+        arg!("-et");
+        arg!(o.entropy_thold.to_string());
         // Contexte coupé : supprime les boucles de répétition.
         if !o.use_context {
-            push("-mc");
-            push("0");
+            arg!("-mc");
+            arg!("0");
         }
         if o.threads > 0 {
-            push("-t");
-            push(&o.threads.to_string());
+            arg!("-t");
+            arg!(o.threads.to_string());
         }
         if let Some(p) = &o.prompt {
             if !p.trim().is_empty() {
-                push("--prompt");
-                push(p);
+                arg!("--prompt");
+                arg!(p.as_str());
             }
         }
         a
@@ -388,41 +394,61 @@ pub fn wav_duration_seconds(path: &Path) -> Option<f32> {
 }
 
 /// Phrases que whisper.cpp produit sur du silence ou du bruit. Ce ne sont pas
-/// des transcriptions : les garder pollue la note de l'utilisateur.
-pub fn is_hallucination(text: &str) -> bool {
-    const MOTIFS: &[&str] = &[
-        "sous-titres réalisés par la communauté",
-        "sous-titrage société radio-canada",
-        "sous-titrage : société radio-canada",
-        "merci d'avoir regardé cette vidéo",
-        "merci d'avoir regardé cette video",
-        "abonnez-vous à ma chaîne",
-        "abonnez vous",
-        "à la prochaine",
-        "n'hésitez pas à vous abonner",
-        "sous-titres par",
-        "amara.org",
-        "[blank_audio]",
-        "(silence)",
-        "[silence]",
-        "[musique]",
-        "♪",
-    ];
+    /// des transcriptions : les garder pollue la note de l'utilisateur.
+    ///
+    /// Trois règles, volontairement étroites — un faux positif supprime une
+    /// vraie dictée en silence, ce qui est pire que laisser passer un générique :
+    ///
+    ///  1. tout le texte est une annotation entre crochets/parenthèses
+    ///     (`[BLANK_AUDIO]`, `[Musique]`, `(applaudissements)`) ;
+    ///  2. le texte ne contient aucun caractère alphanumérique (`♪`) ;
+    ///  3. le texte commence par un générique connu, sans longue traîne derrière
+    ///     (pour ne pas jeter « …on se rappelle demain et à la prochaine »).
+    pub fn is_hallucination(text: &str) -> bool {
+        const PHRASES: &[&str] = &[
+            "sous-titres réalisés par la communauté",
+            "sous-titrage société radio-canada",
+            "sous-titrage : société radio-canada",
+            "sous-titres par",
+            "amara.org",
+            "merci d'avoir regardé cette vidéo",
+            "merci d'avoir regardé cette video",
+            "merci d'avoir regardé la vidéo",
+            "n'hésitez pas à vous abonner",
+            "abonnez-vous à ma chaîne",
+            "abonnez-vous pour",
+            "pensez à vous abonner",
+        ];
+        const EXACTES: &[&str] = &["à la prochaine", "à bientôt", "sous-titres", "sous-titrage"];
 
-    let t = text.trim().trim_matches(|c: char| !c.is_alphanumeric() && c != '[' && c != '(');
-    if t.is_empty() {
-        return true;
-    }
-    let bas = t.to_lowercase();
-    // Un motif court (« à la prochaine ») ne compte que si la phrase entière
-    // s'y résume : sinon on jetterait une vraie dictée qui finit par ces mots.
-    MOTIFS.iter().any(|m| {
-        if bas == *m {
+        let t = text.trim();
+        if t.is_empty() {
             return true;
         }
-        bas.starts_with(m) && bas.len() <= m.len() + 24
-    })
-}
+        let bas = t.to_lowercase();
+
+        // 1) annotation complète : ce que le modèle met entre crochets n'est pas
+        //    de la parole dictée.
+        let entre = (bas.starts_with('[') && bas.ends_with(']'))
+            || (bas.starts_with('(') && bas.ends_with(')'));
+        if entre && bas.chars().count() > 2 {
+            return true;
+        }
+
+        // 2) que des symboles (« ♪ », « ... »).
+        if !bas.chars().any(|c| c.is_alphanumeric()) {
+            return true;
+        }
+
+        // 3) génériques. Une phrase entière qui les résume, ou qui les dépasse
+        //    de quelques mots seulement.
+        if EXACTES.contains(&bas.as_str()) {
+            return true;
+        }
+        PHRASES
+            .iter()
+            .any(|m| bas == *m || (bas.starts_with(m) && bas.chars().count() <= m.chars().count() + 24))
+    }
 
 fn find_binary() -> Option<PathBuf> {
     let mut candidats: Vec<PathBuf> = Vec::new();
@@ -573,15 +599,25 @@ mod tests {
 
     #[test]
     fn les_hallucinations_de_silence_sont_reconnues() {
+        // Génériques de sous-titrage.
         assert!(is_hallucination("Sous-titres réalisés par la communauté d'Amara.org"));
         assert!(is_hallucination("Merci d'avoir regardé cette vidéo"));
+        // Annotations complètes, quelle que soit la casse.
         assert!(is_hallucination("[BLANK_AUDIO]"));
+        assert!(is_hallucination("[Musique]"));
+        assert!(is_hallucination("(applaudissements)"));
+        // Que des symboles.
+        assert!(is_hallucination("♪♪"));
+        // Vide.
         assert!(is_hallucination("   "));
-        // Une vraie dictée qui se termine par ces mots doit survivre.
+
+        // Faux positifs à éviter absolument : une vraie dictée ne doit jamais partir.
         assert!(!is_hallucination(
             "J'ai fini la réunion, on se rappelle demain et à la prochaine"
         ));
         assert!(!is_hallucination("Le moteur de transcription est prêt."));
+        assert!(!is_hallucination("J'ai noté ça entre crochets [urgent] dans la liste"));
+        assert!(!is_hallucination("Merci beaucoup pour ton aide hier soir"));
     }
 
     #[test]
