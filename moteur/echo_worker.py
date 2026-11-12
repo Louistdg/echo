@@ -183,6 +183,110 @@ def normalize_hotwords(value):
     return value[:800] or None
 
 
+# --- choix du materiel -------------------------------------------------------
+
+# Mesure sur cette machine, 3,68 s d'audio, faster-whisper 1.2.1 :
+#   int8 / 4 threads (reglage d'origine)  : 7,5 s
+#   int8 / 8 threads                     : 4,8 s
+#   int8_float32 / 8 threads             : 3,9 s
+# int8_float32 garde les activations en float32 : plus rapide ET plus juste
+# que int8, qui reste le choix par defaut de faster-whisper.
+MEILLEUR_TYPE_CPU = "int8_float32"
+
+_vad_chauffe = False
+
+
+def candidats_materiel():
+    """Rend la liste des (device, compute_type, threads) a essayer, GPU d'abord.
+
+    Le GPU n'est pas adopte sur parole : CTranslate2 peut construire un modele
+    CUDA puis echouer a l'inference (cuBLAS absent sur un Maxwell, par exemple).
+    C'est la verification d'inference, plus bas, qui decide.
+    """
+    threads = max(2, os.cpu_count() or 4)
+    candidats = []
+    try:
+        import ctranslate2
+
+        if ctranslate2.get_cuda_device_count() > 0:
+            supportes = ctranslate2.get_supported_compute_types("cuda")
+            for type_calcul in ("float16", "int8_float16", "int8", "float32"):
+                if type_calcul in supportes:
+                    candidats.append(("cuda", type_calcul, threads))
+                    break
+    except Exception:
+        pass
+    candidats.append(("cpu", MEILLEUR_TYPE_CPU, threads))
+    candidats.append(("cpu", "int8", min(4, max(2, threads - 2))))
+    return candidats
+
+
+def _verifier_inference(modele):
+    """Force un vrai passage dans le modele : 0,5 s de silence.
+
+    C'est ce qui fait apparaitre les erreurs de bibliotheque CUDA, qui ne se
+    declarent qu'a l'inference. Sans cette verification, le worker adopte un
+    modele GPU inutilisable et la dictee echoue (voire reste bloquee).
+    """
+    import numpy as np
+
+    silence = np.zeros(8000, dtype=np.float32)
+    list(modele.transcribe(silence, language="fr", beam_size=1,
+                           without_timestamps=True)[0])
+
+
+def charger_modele(name):
+    """Charge le modele sur le premier materiel qui fonctionne VRAIMENT.
+
+    Rend (modele, device, compute_type, threads). Leve si aucun ne marche.
+    """
+    from faster_whisper import WhisperModel
+
+    derniere = None
+    for device, compute_type, threads in candidats_materiel():
+        try:
+            modele = WhisperModel(name, device=device, compute_type=compute_type,
+                                  cpu_threads=threads, local_files_only=True)
+            _verifier_inference(modele)
+            if device != "cpu":
+                emit("engine", status="accelere", device=device,
+                     compute_type=compute_type)
+            return modele, device, compute_type, threads
+        except Exception as exc:
+            derniere = exc
+            emit("warning",
+                 message=f"{device}/{compute_type} inutilisable ({str(exc)[:140]})")
+    raise derniere if derniere else RuntimeError("aucun materiel disponible")
+
+
+def chauffer_vad():
+    """Charge le modele Silero en tache de fond.
+
+    get_vad_model() coute environ 15 s sur cette machine. Sans ce prechargement,
+    l'utilisateur attend ce temps au moment precis ou il active le mains libres
+    (LiveVad.__init__ appelle get_vad_model). Le faire ici, pendant que la
+    premiere transcription travaille deja, retire cette attente du parcours.
+    """
+    global _vad_chauffe
+
+    if _vad_chauffe:
+        return
+    _vad_chauffe = True
+
+    def travail():
+        try:
+            from faster_whisper.vad import get_vad_model
+
+            debut = time.monotonic()
+            get_vad_model()
+            emit("engine", status="vad-ready",
+                 seconds=round(time.monotonic() - debut, 1))
+        except Exception as exc:  # le VAD reste facultatif
+            emit("warning", message=f"VAD non precharge : {exc}")
+
+    threading.Thread(target=travail, daemon=True).start()
+
+
 def transcription_options(request):
     preview = request.get("preview") is True
     # Final text keeps beam search in both profiles. Greedy Base decoding
@@ -421,13 +525,13 @@ class Engine:
             del previous
             gc.collect()
         emit("engine", status="loading", model=name)
-        from faster_whisper import WhisperModel
-        self.model = WhisperModel(name, device="cpu", compute_type="int8",
-                                  cpu_threads=min(4, max(2, (os.cpu_count() or 4) - 2)),
-                                  local_files_only=True)
+
+        self.model, device, compute_type, threads = charger_modele(name)
         self.model_name = name
         self.models[name] = self.model
-        emit("engine", status="ready", model=name)
+        emit("engine", status="ready", model=name, device=device,
+             compute_type=compute_type, cpu_threads=threads)
+        chauffer_vad()
 
     def run(self):
         while True:
