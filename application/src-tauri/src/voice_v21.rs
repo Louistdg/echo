@@ -16,9 +16,12 @@ use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::{capture, workspace};
 
+#[path = "voice_pipeline.rs"]
+mod pipeline;
+use pipeline::{InlinePreview, InlineTicket, TextPresentation};
+
 const MAX_JOBS: usize = 4;
 const DICTATION_LIMIT_SECS: u64 = 300;
-const RECORDING_LIMIT_SECS: u64 = 3600;
 static EPOCH: AtomicU64 = AtomicU64::new(1);
 static START_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -32,6 +35,7 @@ static RUNTIME: LazyLock<Mutex<Runtime>> = LazyLock::new(|| Mutex::new(Runtime::
 static WORKER: Mutex<Option<Arc<Worker>>> = Mutex::new(None);
 static WORKER_ID: AtomicU64 = AtomicU64::new(0);
 static CANCEL_WAIT: LazyLock<Mutex<HashMap<String, Instant>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static PREVIEW_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceState {
@@ -43,6 +47,18 @@ pub struct VoiceState {
     pub session_id: Option<String>,
     pub text: String,
     pub partial: String,
+    #[serde(default)]
+    pub finalizing_text: String,
+    #[serde(default)]
+    pub finalizing_id: Option<String>,
+    #[serde(default)]
+    pub last_sent_text: String,
+    #[serde(default)]
+    pub sent_count: usize,
+    #[serde(default)]
+    pub inline_preview_supported: bool,
+    #[serde(default)]
+    pub inline_preview_active: bool,
     pub error: Option<String>,
     pub audio_path: Option<String>,
     pub duration_secs: f64,
@@ -57,6 +73,9 @@ impl Default for VoiceState {
     fn default() -> Self {
         Self { microphone_open: false, phase: "idle".into(), mode: "hold".into(), kind: "dictation".into(),
             session_id: None, text: String::new(), partial: String::new(), error: None,
+            finalizing_text: String::new(), finalizing_id: None,
+            last_sent_text: String::new(), sent_count: 0,
+            inline_preview_supported: false, inline_preview_active: false,
             audio_path: None, duration_secs: 0.0, level: 0.0, progress: None,
             engine: "cold".into(), message: "Prêt à dicter".into(),
             target_label: "Note Écho".into(), queued: 0 }
@@ -89,13 +108,28 @@ struct Active {
 struct Job {
     id: String, spec: SessionSpec, audio_path: String, duration_secs: f64,
     status: String, text: String, error: Option<String>,
+    #[serde(default)]
+    provisional: bool,
 }
 impl Job {
     fn blocked(&self) -> bool { matches!(self.status.as_str(), "result" | "error" | "delivering") }
 }
+fn restore_job(mut job:Job,epoch:u64)->Job{
+    job.spec.epoch=epoch;
+    job.status=if job.text.is_empty(){"error"}else{"result"}.into();
+    job.error=Some(if job.text.is_empty(){"Prise retrouvée après redémarrage. Réessaie la transcription."}
+        else if job.provisional{"Brouillon provisoire retrouvé, non validé par la transcription finale. Réessaie avec l’audio conservé ou vérifie le texte avant de le recopier."}
+        else{"Texte retrouvé. Vérifie la destination avant de le recopier."}.into());
+    job
+}
+#[derive(Clone)]
+struct InlineContext { ticket: InlineTicket, spec: SessionSpec, audio_path: String }
 #[derive(Default)]
 struct Runtime {
     state: VoiceState, active: Option<Active>, arming: bool,
+    presentation: TextPresentation,
+    inline: InlinePreview, inline_context: Option<InlineContext>,
+    phrase_audio: Option<(String, String)>,
     jobs: VecDeque<Job>, current: Option<String>, sessions: HashMap<String, SessionSpec>,
     vad_ready: Option<String>, speech: bool, last_error: Option<String>,
 }
@@ -110,6 +144,13 @@ fn persist(job: &Job) -> Result<(), String> {
         .map_err(|e| format!("Résultat non sauvegardé : {e}"))
 }
 fn refresh(runtime: &mut Runtime) {
+    runtime.state.partial = runtime.presentation.partial.clone();
+    runtime.state.finalizing_text = runtime.presentation.finalizing_text.clone();
+    runtime.state.finalizing_id = runtime.presentation.finalizing_id.clone();
+    runtime.state.last_sent_text = runtime.presentation.last_sent_text.clone();
+    runtime.state.sent_count = runtime.presentation.sent_count;
+    runtime.state.inline_preview_supported = runtime.inline.supported;
+    runtime.state.inline_preview_active = runtime.inline.active();
     // A retained result can take display priority while the live stream is closing.
     // Keep microphone control independent from the result/error phase.
     runtime.state.microphone_open = runtime.arming || runtime.active.is_some();
@@ -132,7 +173,7 @@ fn refresh(runtime: &mut Runtime) {
     }
     runtime.state.error = runtime.last_error.clone();
     if let Some(active) = runtime.active.as_ref() {
-        runtime.state.phase = if streams_phrases(&active.spec.kind, &active.spec.mode) && !runtime.speech { "listening" } else { "recording" }.into();
+        runtime.state.phase = if streams_phrases(&active.spec.kind,&active.spec.mode) && !runtime.speech { "listening" } else { "recording" }.into();
         runtime.state.mode = active.spec.mode.clone();
         runtime.state.kind = active.spec.kind.clone();
         runtime.state.session_id = Some(active.spec.id.clone());
@@ -168,42 +209,35 @@ fn snapshot() -> VoiceState {
     let mut runtime = RUNTIME.lock().unwrap(); refresh(&mut runtime); runtime.state.clone()
 }
 
-
-// Interest is reported by the actual text views, never by the microphone bar.
-// Native visibility is checked too: a hidden or minimized view needs no decode.
-static PREVIEW_INTEREST:LazyLock<Mutex<HashMap<String,bool>>>=LazyLock::new(||Mutex::new(HashMap::new()));
-fn preview_view_needed(interested:bool,visible:bool,minimized:bool)->bool{interested&&visible&&!minimized}
+// Compatibility notification from text views. Preview production deliberately
+// continues while collapsed or hidden; final decoding takes priority.
 #[tauri::command]
 pub fn voice_preview_interest(window:tauri::WebviewWindow,enabled:bool)->Result<bool,String>{
  let label=window.label();
  if !matches!(label,"main"|"dock-panels"){return Err("Cette fenêtre ne présente pas le texte en direct.".into())}
- PREVIEW_INTEREST.lock().map_err(|_|"État des aperçus indisponible")?.insert(label.into(),enabled);
- Ok(preview_view_needed(enabled,window.is_visible().unwrap_or(false),window.is_minimized().unwrap_or(true)))
-}
-fn preview_has_view(app:&AppHandle)->bool{
- let interested=PREVIEW_INTEREST.lock().map(|v|v.clone()).unwrap_or_default();
- interested.iter().any(|(label,enabled)|{
-  if !*enabled{return false}
-  app.get_webview_window(label).is_some_and(|w|preview_view_needed(true,w.is_visible().unwrap_or(false),w.is_minimized().unwrap_or(true)))
- })
+ Ok(enabled)
 }
 const PREVIEW_SAMPLES:usize=12*16_000;
-const PREVIEW_INTERVAL:Duration=Duration::from_millis(400);
+const PREVIEW_INTERVAL: Duration = Duration::from_millis(400);
 #[derive(Clone,Debug)]
 struct PreviewWord {word:String,start:f64,end:f64}
-struct PreviewCapture {spec:SessionSpec,audio:VecDeque<i16>,samples:u64,last_sent:Instant,inflight:Option<String>,prefix:String,prefix_end:f64,words:Vec<PreviewWord>}
+struct PreviewCapture {spec:SessionSpec,generation:u64,audio:VecDeque<i16>,samples:u64,last_sent:Instant,inflight:Option<String>,prefix:String,prefix_end:f64,words:Vec<PreviewWord>}
 #[derive(Clone)]
-struct PreviewJob {session:String,epoch:u64,start:f64,path:PathBuf}
+struct PreviewJob {session:String,epoch:u64,generation:u64,speech_phrase:Option<String>,start:f64,path:PathBuf}
 #[derive(Default)]
 struct PreviewRuntime {active:Option<PreviewCapture>,jobs:HashMap<String,PreviewJob>}
 static PREVIEW:LazyLock<Mutex<PreviewRuntime>>=LazyLock::new(||Mutex::new(PreviewRuntime::default()));
 fn preview_begin(spec:&SessionSpec){
  let old={
-  let runtime=RUNTIME.lock().unwrap();
+  let mut runtime=RUNTIME.lock().unwrap();
   if !runtime.active.as_ref().is_some_and(|a|a.spec.id==spec.id)&&!(runtime.arming&&runtime.sessions.contains_key(&spec.id)){return}
+  runtime.presentation.clear_preview();
+  let generation=PREVIEW_SEQUENCE.fetch_add(1,Ordering::SeqCst)+1;
+  runtime.inline.next_phrase(&spec.id,spec.epoch,generation);
+  runtime.phrase_audio=None;
   let mut p=PREVIEW.lock().unwrap();
   let old=p.active.take().and_then(|a|a.inflight);
-  p.active=Some(PreviewCapture{spec:spec.clone(),audio:VecDeque::with_capacity(PREVIEW_SAMPLES),samples:0,last_sent:Instant::now(),inflight:None,prefix:String::new(),prefix_end:0.0,words:vec![]});
+  p.active=Some(PreviewCapture{spec:spec.clone(),generation,audio:VecDeque::with_capacity(PREVIEW_SAMPLES),samples:0,last_sent:Instant::now(),inflight:None,prefix:String::new(),prefix_end:0.0,words:vec![]});
   old
  };
  if let Some(id)=old{if let Some(worker)=WORKER.lock().unwrap().clone(){let _=worker.send(json!({"op":"cancel","id":id}));}}
@@ -226,21 +260,26 @@ fn preview_stop(session:&str){
  let cancel={let mut p=PREVIEW.lock().unwrap();if p.active.as_ref().is_some_and(|a|a.spec.id==session){p.active.take().and_then(|a|a.inflight)}else{None}};
  if let Some(id)=cancel{if let Some(worker)=WORKER.lock().unwrap().clone(){let _=worker.send(json!({"op":"cancel","id":id}));}}
 }
-fn preview_ready(active:&mut PreviewCapture,samples:&[i16],now:Instant,needed:bool)->bool{
- active.audio.extend(samples.iter().copied());active.samples+=samples.len() as u64;
- while active.audio.len()>PREVIEW_SAMPLES{active.audio.pop_front();}
- if !needed||active.audio.len()<9_600||now.duration_since(active.last_sent)<PREVIEW_INTERVAL||active.inflight.is_some(){return false}
- active.last_sent=now;true
+fn preview_ready(active: &mut PreviewCapture, samples: &[i16], now: Instant, final_pending: bool) -> bool {
+    active.audio.extend(samples.iter().copied());
+    active.samples += samples.len() as u64;
+    while active.audio.len() > PREVIEW_SAMPLES { active.audio.pop_front(); }
+    if final_pending || active.audio.len() < 9_600 || active.inflight.is_some()
+        || now.saturating_duration_since(active.last_sent) < PREVIEW_INTERVAL
+    { return false; }
+    active.last_sent = now;
+    true
 }
 fn preview_matches(active:&PreviewCapture,job:&PreviewJob,id:&str,epoch:u64)->bool{
- active.spec.id==job.session&&active.spec.epoch==job.epoch&&active.spec.epoch==epoch&&active.inflight.as_deref()==Some(id)
+ active.spec.id==job.session&&active.spec.epoch==job.epoch&&active.spec.epoch==epoch&&active.generation==job.generation&&active.inflight.as_deref()==Some(id)
 }
 fn preview_feed(app:&AppHandle,session:&str,samples:&[i16]){
- // Buffer every audio block, but query native windows only at the bounded
- // preview interval and without holding the preview/capture-state lock.
+ // Buffer all audio. Avoid generating optional WAVs while a durable final is
+ // waiting, decoding or being delivered. Visibility never disables the preview.
+ let (final_pending,speech_phrase)=RUNTIME.try_lock().map(|r|(r.current.is_some()||r.jobs.iter().any(|j|matches!(j.status.as_str(),"queued"|"transcribing"|"delivering")),r.phrase_audio.as_ref().map(|(id,_)|id.clone()))).unwrap_or((true,None));
  let due={
   let mut p=PREVIEW.lock().unwrap();let Some(active)=p.active.as_mut().filter(|a|a.spec.id==session&&a.spec.epoch==EPOCH.load(Ordering::SeqCst))else{return};
-  preview_ready(active,samples,Instant::now(),true)
+  preview_ready(active,samples,Instant::now(),final_pending)
  };
  if !due{return}
  let ready={
@@ -249,7 +288,7 @@ fn preview_feed(app:&AppHandle,session:&str,samples:&[i16]){
   let start=(active.samples-active.audio.len() as u64) as f64/16000.0;
   let data:Vec<i16>=active.audio.iter().copied().collect();let spec=active.spec.clone();active.inflight=Some(id.clone());
   let path=workspace::portable_root().join("configuration/voice-preview").join(format!("{id}.wav"));
-  let job=PreviewJob{session:session.into(),epoch:spec.epoch,start,path:path.clone()};p.jobs.insert(id.clone(),job);
+  let job=PreviewJob{session:session.into(),epoch:spec.epoch,generation:active.generation,speech_phrase,start,path:path.clone()};p.jobs.insert(id.clone(),job);
   (id,path,data,spec)
  };
  let (id,path,data,spec)=ready;let handle=app.clone();
@@ -296,27 +335,139 @@ fn combine_preview(active:&mut PreviewCapture,start:f64,event:&Value)->String{
 fn preview_event(app:&AppHandle,event:&Value)->bool{
  let id=event["id"].as_str().unwrap_or("");if !id.starts_with("preview-"){return false}
  let name=event["event"].as_str().unwrap_or("");let terminal=matches!(name,"result"|"error"|"cancelled");
- let (text,cleanup,session,epoch)={
+ let (text,cleanup,session,epoch,generation,speech_phrase)={
   let mut p=PREVIEW.lock().unwrap();let Some(job)=p.jobs.get(id).cloned()else{return true};
   let mut text=None;
   if let Some(active)=p.active.as_mut().filter(|a|preview_matches(a,&job,id,EPOCH.load(Ordering::SeqCst))){
    if matches!(name,"progress"|"result"){text=Some(combine_preview(active,job.start,event));}
    if terminal{active.inflight=None;}
   }
-  let cleanup=if terminal{p.jobs.remove(id).map(|j|j.path)}else{None};(text,cleanup,job.session,job.epoch)
+  let cleanup=if terminal{p.jobs.remove(id).map(|j|j.path)}else{None};(text,cleanup,job.session,job.epoch,job.generation,job.speech_phrase)
  };
  if let Some(path)=cleanup{remove_preview_file(&path); }
  if let Some(text)=text{
-  let handle={let mut r=RUNTIME.lock().unwrap();if r.active.as_ref().is_none_or(|a|a.spec.id!=session||a.spec.epoch!=epoch){return true}r.state.partial=text.clone();
-   // Une phrase finalisée en cours de transcription possède déjà son direct :
-   // le provisoire de la phrase suivante attend la restitution pour ne pas
-   // mélanger les deux dans le champ.
-   let pending=r.jobs.iter().any(|j|j.spec.id==session&&matches!(j.status.as_str(),"queued"|"transcribing"|"delivering"));
-   if pending { None } else { r.active.as_ref().and_then(|a| inline_preview_handle(&a.spec)) }};
-  if let Some(handle)=handle{crate::dictation_target::live_update(handle,text,false);}
+  {let mut r=RUNTIME.lock().unwrap();if epoch!=EPOCH.load(Ordering::SeqCst)||r.active.as_ref().is_none_or(|a|a.spec.id!=session||a.spec.epoch!=epoch){return true}r.presentation.preview(&session,text.clone());}
+  inline_preview_write(app,&session,epoch,generation,speech_phrase.as_deref(),&text);
   publish(app);
  }
  true
+}
+
+
+// DELIVERY serializes preview, final replacement and removal. Native UIA calls
+// must never hold RUNTIME or PREVIEW, including when they wait for focus.
+fn inline_preview_write(app:&AppHandle,session:&str,epoch:u64,generation:u64,speech_phrase:Option<&str>,text:&str){
+    let Ok(delivery)=DELIVERY.lock() else{return};
+    let context={
+        let runtime=RUNTIME.lock().unwrap();
+        let Some(active)=runtime.active.as_ref().filter(|a|a.spec.id==session&&a.spec.epoch==epoch)else{return};
+        if !streams_phrases(&active.spec.kind,&active.spec.mode)||STOP_REQUESTED.load(Ordering::SeqCst){return}
+        let pending=runtime.current.is_some()||!runtime.jobs.is_empty();
+        let Some(ticket)=runtime.inline.propose(session,epoch,generation,text,pending,speech_phrase)else{return};
+        if !runtime.inline.accepts(&ticket,EPOCH.load(Ordering::SeqCst),pending){return}
+        let Some((_,path))=runtime.phrase_audio.as_ref().filter(|(phrase,_)|phrase==&ticket.phrase)else{return};
+        let Target::Application{handle}= &active.spec.target else{return};
+        if handle.is_empty(){return}
+        InlineContext{ticket,spec:active.spec.clone(),audio_path:path.clone()}
+    };
+    let Target::Application{handle}= &context.spec.target else{return};
+    let outcome=crate::dictation_target::preview_at_cursor(handle.clone(),context.ticket.text.clone());
+    let failed={
+        let mut runtime=RUNTIME.lock().unwrap();
+        match outcome{
+            Ok(true)=>{runtime.inline.applied(context.ticket.clone());runtime.inline_context=Some(context);false},
+            Ok(false)=>{runtime.inline.unsupported();false},
+            Err(error)=>{
+                runtime.inline.rejected(context.ticket.clone());runtime.inline_context=Some(context);
+                runtime.last_error=Some(error.clone());
+                runtime.state.message=format!("Aperçu interrompu · texte conservé : {error}");true
+            }
+        }
+    };
+    drop(delivery);
+    if failed{
+        STOP_REQUESTED.store(true,Ordering::SeqCst);
+        let handle=app.clone();std::thread::spawn(move||{let _=stop_impl(&handle,false);});
+    }
+}
+fn clear_inline_context(runtime:&mut Runtime,session:&str,phrase:&str){
+    runtime.inline.resolved(session,phrase);
+    if runtime.inline_context.as_ref().is_some_and(|c|c.ticket.session==session&&c.ticket.phrase==phrase){runtime.inline_context=None;}
+}
+// Caller holds DELIVERY. False from the native API means no owned composition;
+// tainted/uncertain writes are errors and must remain recoverable.
+fn discard_inline_locked(expected:Option<(&str,&str)>)->Result<(),String>{
+    let context={
+        let runtime=RUNTIME.lock().unwrap();
+        runtime.inline_context.as_ref().filter(|c|runtime.inline.matches(&c.ticket.session,&c.ticket.phrase)
+            &&expected.is_none_or(|(session,phrase)|c.ticket.session==session&&c.ticket.phrase==phrase)).cloned()
+    };
+    let Some(context)=context else{return Ok(())};
+    let Target::Application{handle}= &context.spec.target else{return Ok(())};
+    let result=crate::dictation_target::discard_preview_at_cursor(handle.clone());
+    if let Err(error)=result{
+        RUNTIME.lock().unwrap().inline.rejected(context.ticket.clone());
+        return Err(error);
+    }
+    clear_inline_context(&mut RUNTIME.lock().unwrap(),&context.ticket.session,&context.ticket.phrase);
+    Ok(())
+}
+fn inline_recovery_job(context:&InlineContext,existing:Option<&Job>,error:&str,epoch:u64)->Job{
+    let mut job=existing.cloned().unwrap_or_else(||Job{
+        id:context.ticket.phrase.clone(),spec:context.spec.clone(),audio_path:context.audio_path.clone(),
+        duration_secs:0.0,status:"result".into(),text:String::new(),error:None,provisional:true,
+    });
+    let provisional=job.provisional||job.text.is_empty();
+    if job.text.is_empty(){job.text=context.ticket.text.clone();}
+    job.provisional=provisional;
+    job.status=if job.text.is_empty(){"error"}else{"result"}.into();
+    job.spec.epoch=epoch;
+    job.error=Some(format!("{} Vérifie le contenu du champ avant de recopier. {error}",
+        if provisional{"Brouillon provisoire conservé, non validé par la transcription finale."}else{"Texte final conservé."}));
+    job
+}
+fn retain_inline_locked(error:&str)->Result<(),String>{
+    let candidate={
+        let runtime=RUNTIME.lock().unwrap();
+        runtime.inline_context.as_ref().map(|context|inline_recovery_job(context,
+            runtime.jobs.iter().find(|j|j.id==context.ticket.phrase),error,EPOCH.load(Ordering::SeqCst)))
+    };
+    let Some(mut job)=candidate else{return Ok(())};
+    let saved=persist(&job);
+    if let Err(ref error)=saved{job.error=Some(format!("{} {error}",job.error.as_deref().unwrap_or("Texte conservé.")));}
+    let mut runtime=RUNTIME.lock().unwrap();
+    if runtime.current.as_deref()==Some(job.id.as_str()){runtime.current=None;}
+    runtime.presentation.end_final(&job.id);
+    if let Some(existing)=runtime.jobs.iter_mut().find(|j|j.id==job.id){*existing=job;}else{runtime.jobs.push_back(job);}
+    saved
+}
+// An unexpected engine loss is not a user discard: keep recognized draft
+// text durably even when the native span can be safely removed.
+fn preserve_inline_on_engine_failure(session:Option<&str>,reason:&str){
+    let Ok(_delivery)=DELIVERY.lock()else{return};
+    let relevant=RUNTIME.lock().unwrap().inline_context.as_ref().is_some_and(|c|session.is_none_or(|id|c.ticket.session==id));
+    if !relevant{return}
+    if let Err(error)=pipeline::preserve_before_removal(||retain_inline_locked(reason),||discard_inline_locked(None)){
+        let _=retain_inline_locked(&format!("{reason} {error}"));
+    }
+}
+// Copy/note/discard is an explicit resolution. If the user edited the draft,
+// archive the result before relinquishing tracking; never erase unknown text.
+fn settle_manual_inline_locked(job:&Job)->Result<(),String>{
+    if discard_inline_locked(Some((&job.spec.id,&job.id))).is_err(){
+        let state=snapshot();
+        save_recovery(&job_dir().join("prises-conservees"),&VecDeque::from([job.clone()]),&state)?;
+        clear_inline_context(&mut RUNTIME.lock().unwrap(),&job.spec.id,&job.id);
+    }
+    Ok(())
+}
+fn clear_empty_inline(app:&AppHandle,session:&str,phrase:&str){
+    let Ok(delivery)=DELIVERY.lock()else{return};
+    let failed=if let Err(error)=discard_inline_locked(Some((session,phrase))){
+        let _=retain_inline_locked(&error);true
+    }else{false};
+    drop(delivery);
+    if failed{STOP_REQUESTED.store(true,Ordering::SeqCst);let handle=app.clone();std::thread::spawn(move||{let _=stop_impl(&handle,false);});}
 }
 
 struct Worker {
@@ -370,11 +521,13 @@ fn ensure_worker(app: &AppHandle, python: &str) -> Result<Arc<Worker>, String> {
     Ok(worker)
 }
 fn worker_lost(app: &AppHandle) {
+    preserve_inline_on_engine_failure(None,"Le moteur s’est arrêté avant la validation finale.");
     preview_cleanup_all();
     { let mut runtime = RUNTIME.lock().unwrap();
         runtime.state.engine = "error".into(); runtime.vad_ready = None;
         runtime.last_error = Some("Le moteur local s'est arrêté. Les enregistrements sont conservés.".into());
         runtime.current = None;
+        runtime.presentation.cancel();
         for job in runtime.jobs.iter_mut().filter(|j| j.status == "transcribing" || j.status == "queued") {
             job.status = "error".into(); job.error = Some("Moteur arrêté. Réessaie avec l'audio conservé.".into()); let _ = persist(job);
         }
@@ -389,26 +542,15 @@ fn session_mode(kind:&str, configured:&str, requested:Option<&str>)->Result<Stri
  if !matches!(mode,"hold"|"toggle"|"handsfree"){return Err("Mode de dictée inconnu".into())}
  Ok(mode.into())
 }
-
-fn streams_phrases(kind: &str, mode: &str) -> bool {
-    kind == "dictation" && matches!(mode, "toggle" | "handsfree")
+fn streams_phrases(kind:&str,mode:&str)->bool{
+    kind=="dictation" && matches!(mode,"toggle"|"handsfree")
 }
-
-fn capture_limit_secs(kind: &str) -> u64 {
-    if kind == "recording" { RECORDING_LIMIT_SECS } else { DICTATION_LIMIT_SECS }
+fn capture_limit_secs(kind:&str)->u64{
+    if kind=="recording"{3600}else{DICTATION_LIMIT_SECS}
 }
-
-fn inline_preview_handle(spec: &SessionSpec) -> Option<String> {
-    match &spec.target {
-        Target::Application { handle } if spec.kind == "dictation"
-            && !streams_phrases(&spec.kind, &spec.mode) && !handle.is_empty() => Some(handle.clone()),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod direct_click_tests{
- use super::{capture_limit_secs, session_mode, streams_phrases};
+ use super::{session_mode,streams_phrases,capture_limit_secs};
  #[test]fn click_can_listen_continuously_even_with_legacy_hold_preference(){
   assert_eq!(session_mode("dictation","hold",Some("handsfree")).unwrap(),"handsfree");
   assert_eq!(session_mode("dictation","hold",None).unwrap(),"hold");
@@ -417,18 +559,18 @@ mod direct_click_tests{
   assert_eq!(session_mode("recording","handsfree",Some("handsfree")).unwrap(),"toggle");
   assert!(session_mode("dictation","hold",Some("invalid")).is_err());
  }
- #[test]
- fn toggle_and_handsfree_stream_only_dictation() {
-    for mode in ["toggle", "handsfree"] {
-        assert!(streams_phrases("dictation", mode));
-        assert!(!streams_phrases("recording", mode));
-    }
-    assert!(!streams_phrases("dictation", "hold"));
+ #[test]fn toggle_and_handsfree_stream_phrases_without_changing_the_gesture(){
+  for mode in ["toggle","handsfree"]{
+   assert!(streams_phrases("dictation",mode));
+   assert_eq!(session_mode("dictation","hold",Some(mode)).unwrap(),mode);
+   assert!(!streams_phrases("recording",mode));
+  }
+  assert!(!streams_phrases("dictation","hold"));
+  assert!(!streams_phrases("recording","toggle"));
  }
- #[test]
- fn dictation_and_recording_have_separate_capture_limits() {
-    assert_eq!(capture_limit_secs("dictation"), 300);
-    assert_eq!(capture_limit_secs("recording"), 3600);
+ #[test]fn dictation_is_bounded_to_five_minutes_and_recording_keeps_one_hour(){
+  assert_eq!(capture_limit_secs("dictation"),300);
+  assert_eq!(capture_limit_secs("recording"),3600);
  }
 }
 fn session_target(kind: &str, fallback: &FrozenNote) -> Result<(Target, String), String> {
@@ -464,11 +606,16 @@ fn begin_start() -> u64 {
 // old result to the newly selected field. Recovery is durable before dequeueing.
 fn preserve_pending_before_start() -> Result<(), String> {
     let _delivery = DELIVERY.lock().map_err(|_| "Restitution verrouillée")?;
+    if !RUNTIME.lock().unwrap().jobs.iter().any(Job::blocked) { return Ok(()); }
+    let _=discard_inline_locked(None);
     let mut runtime = RUNTIME.lock().unwrap();
-    if !runtime.jobs.iter().any(Job::blocked) { return Ok(()); }
+    refresh(&mut runtime);
     save_recovery(&job_dir().join("prises-conservees"), &runtime.jobs, &runtime.state)?;
+    if let Some(context)=runtime.inline_context.clone(){clear_inline_context(&mut runtime,&context.ticket.session,&context.ticket.phrase);}
+    runtime.inline.end_capture();
     EPOCH.fetch_add(1, Ordering::SeqCst);
     runtime.current = None;
+    runtime.presentation.cancel();
     let jobs = runtime.jobs.drain(..).collect::<Vec<_>>();
     for job in &jobs {
         runtime.sessions.remove(&job.spec.id);
@@ -497,29 +644,29 @@ fn save_recovery(directory: &Path, jobs: &VecDeque<Job>, state: &VoiceState) -> 
     crate::atomic::write_atomic(&directory.join(format!("{name}.txt")), text.as_bytes()).map_err(|e|format!("Prises non sauvegardées : {e}"))?;
     Ok(path)
 }
-fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option<String>) -> Result<(), String> {
+fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option<String>) -> Result<bool, String> {
     crate::translation::shutdown(app);
     let control = CONTROL.lock().map_err(|_| "Commande vocale verrouillée")?;
     { let runtime = RUNTIME.lock().unwrap();
-        if runtime.active.is_some() || runtime.arming { return Ok(()); }
+        if runtime.active.is_some() || runtime.arming { return Ok(false); }
         if !runtime.jobs.iter().any(Job::blocked) && runtime.jobs.len() >= MAX_JOBS { return Err("La file est pleine. Attends la fin de la transcription.".into()); }
     }
-    if START_SEQUENCE.load(Ordering::SeqCst) != request { return Ok(()); }
+    if START_SEQUENCE.load(Ordering::SeqCst) != request { return Ok(false); }
     let (mut spec, device, silence_ms) = session_spec(kind, mode_override)?;
-    if START_SEQUENCE.load(Ordering::SeqCst) != request { return Ok(()); }
+    if START_SEQUENCE.load(Ordering::SeqCst) != request { return Ok(false); }
     preserve_pending_before_start()?;
     spec.epoch = EPOCH.load(Ordering::SeqCst);
     { let mut runtime = RUNTIME.lock().unwrap(); runtime.arming = true; runtime.last_error = None;
-        runtime.state.text.clear(); runtime.state.partial.clear(); runtime.state.audio_path = None;
+        runtime.state.text.clear(); runtime.presentation.clear_preview(); runtime.state.audio_path = None;
         runtime.state.mode = spec.mode.clone(); runtime.state.kind = spec.kind.clone();
+        runtime.speech = false; runtime.inline.begin_session(&spec.id, spec.epoch); runtime.phrase_audio = None;
         runtime.state.target_label = spec.target_label.clone(); runtime.state.message = "Ouverture du micro…".into();
         runtime.sessions.insert(spec.id.clone(), spec.clone());
     }
     publish(app);
     if spec.kind == "dictation" { preview_begin(&spec); }
-    let stream_phrases = streams_phrases(&spec.kind, &spec.mode);
     let result: Result<Option<capture::StreamCapture>, String> = (|| {
-        if stream_phrases {
+        if streams_phrases(&spec.kind,&spec.mode) {
             let worker = ensure_worker(app, &spec.python)?;
             worker.send(json!({"op":"listen_start","id":spec.id,"directory":capture::recordings_dir(Path::new(&spec.workspace)),"silence_ms":silence_ms,"max_phrase_secs":DICTATION_LIMIT_SECS}))?;
             let until = Instant::now() + Duration::from_secs(12);
@@ -552,35 +699,44 @@ fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option
     })();
     match result {
         Ok(stream) => { let mut runtime = RUNTIME.lock().unwrap();
-            runtime.arming = false; runtime.speech = false;
-            runtime.state.message = if stream_phrases { "Écoute active · une pause transmet chaque phrase" } else if spec.kind == "recording" { "Enregistrement en cours" } else { "Parle, puis relâche ou arrête" }.into();
+            runtime.arming = false;
+            runtime.presentation.begin_session(&spec.id);
+            runtime.state.message = if streams_phrases(&spec.kind,&spec.mode) { "Écoute active · une pause transmet chaque phrase" } else if spec.kind == "recording" { "Enregistrement en cours" } else { "Parle, puis relâche ou arrête" }.into();
             runtime.active = Some(Active { spec, started: Instant::now(), stream });
         }
         Err(error) => {
             preview_stop(&spec.id);
-            { let mut runtime = RUNTIME.lock().unwrap(); runtime.arming = false; runtime.sessions.remove(&spec.id); }
-            if stream_phrases {
+            { let mut runtime = RUNTIME.lock().unwrap(); runtime.arming = false; runtime.inline.end_capture(); runtime.sessions.remove(&spec.id); }
+            if streams_phrases(&spec.kind,&spec.mode) {
                 if let Some(worker) = WORKER.lock().unwrap().clone() {
                     let _ = worker.send(json!({"op":"listen_stop","id":spec.id,"cancelled":true}));
                 }
             }
             if STOP_REQUESTED.load(Ordering::SeqCst) || START_SEQUENCE.load(Ordering::SeqCst) != request {
-                RUNTIME.lock().unwrap().state.message = "Écoute annulée · micro fermé".into(); publish(app); return Ok(());
+                RUNTIME.lock().unwrap().state.message = "Écoute annulée · micro fermé".into(); publish(app); return Ok(false);
             }
             return Err(error);
         }
     }
     publish(app);
     drop(control);
-    if STOP_REQUESTED.load(Ordering::SeqCst) || START_SEQUENCE.load(Ordering::SeqCst) != request { stop_impl(app, false)?; }
-    Ok(())
+    if STOP_REQUESTED.load(Ordering::SeqCst) || START_SEQUENCE.load(Ordering::SeqCst) != request { stop_impl(app, false)?; return Ok(false); }
+    Ok(true)
 }
 
-fn queue_job(app: &AppHandle, mut job: Job) {
-    if job.spec.epoch != EPOCH.load(Ordering::SeqCst) { job.status = "cancelled".into(); let _ = persist(&job); return; }
-    if let Err(error) = persist(&job) { job.status = "error".into(); job.error = Some(error); }
+fn prepare_queued_job(mut job:Job,epoch:u64,known:bool,save:impl FnOnce(&Job)->Result<(),String>)->Option<Job>{
+    // A late utterance must not overwrite a retained result under its UUID,
+    // including a provisional recovery created before that utterance arrived.
+    if known||job.spec.epoch!=epoch{return None}
+    if let Err(error)=save(&job){job.status="error".into();job.error=Some(error);}
+    Some(job)
+}
+fn queue_job(app: &AppHandle, job: Job) {
+    // Cancel cannot drain between the epoch check, durable write and enqueue.
+    let _delivery = DELIVERY.lock().unwrap();
+    let known=RUNTIME.lock().unwrap().jobs.iter().any(|j|j.id==job.id);
+    let Some(mut job)=prepare_queued_job(job,EPOCH.load(Ordering::SeqCst),known,persist)else{return};
     let full = { let mut runtime = RUNTIME.lock().unwrap();
-        if runtime.jobs.iter().any(|j| j.id == job.id) { return; }
         let full = runtime.jobs.len() >= MAX_JOBS;
         if full { job.status = "error".into(); job.error = Some("File pleine : audio conservé pour une reprise.".into()); let _ = persist(&job); }
         runtime.jobs.push_back(job); full
@@ -590,7 +746,7 @@ fn queue_job(app: &AppHandle, mut job: Job) {
 }
 fn stop_impl(app: &AppHandle, cancelled: bool) -> Result<(), String> {
     let control = CONTROL.lock().map_err(|_| "Commande vocale verrouillée")?;
-    let active = { let mut runtime = RUNTIME.lock().unwrap(); runtime.speech = false; runtime.active.take() };
+    let active = { let mut runtime = RUNTIME.lock().unwrap(); runtime.speech = false; runtime.presentation.end_capture(); runtime.inline.end_capture(); runtime.active.take() };
     let Some(active) = active else { return Ok(()); };
     preview_stop(&active.spec.id);
     if let Some(stream) = active.stream {
@@ -616,7 +772,7 @@ fn stop_impl(app: &AppHandle, cancelled: bool) -> Result<(), String> {
             RUNTIME.lock().unwrap().state.message = if cancelled { "Prise annulée · audio conservé" } else { "Enregistrement rangé dans le dossier audio" }.into();
         } else if info.duration_secs >= 0.1 {
             let job = Job { id: active.spec.id.clone(), spec: active.spec, audio_path: info.path,
-                duration_secs: info.duration_secs, status: "queued".into(), text: String::new(), error: None };
+                duration_secs: info.duration_secs, status: "queued".into(), text: String::new(), error: None, provisional: false };
             drop(control); queue_job(app, job); let _ = app.emit("recordings:changed", ()); return Ok(());
         } else { RUNTIME.lock().unwrap().state.message = "Prise trop courte · recommence en maintenant la touche".into(); }
         let _ = app.emit("recordings:changed", ());
@@ -629,6 +785,7 @@ fn dispatch_next(app: &AppHandle) {
         let Some(job) = runtime.jobs.iter_mut().find(|j| j.status == "queued") else { return; };
         job.status = "transcribing".into(); let next = job.clone();
         runtime.current = Some(next.id.clone()); runtime.state.progress = None;
+        runtime.presentation.begin_final(&next.id);
         // Keep the last hypothesis visible while the full durable WAV is decoded.
         runtime.state.message = "Transcription locale…".into(); next
     };
@@ -639,32 +796,34 @@ fn dispatch_next(app: &AppHandle) {
     publish(app);
 }
 fn job_error(app: &AppHandle, id: &str, message: String) {
-    let live_handle = { let mut runtime = RUNTIME.lock().unwrap();
-        let mut handle = None;
+    { let mut runtime = RUNTIME.lock().unwrap();
+        let inline=runtime.inline_context.as_ref().filter(|c|c.ticket.phrase==id).cloned();
         if let Some(job) = runtime.jobs.iter_mut().find(|j| j.id == id) {
-            job.status = "error".into(); job.error = Some(message.clone());
-            // Un échec avant restitution (par ex. aucune parole détectée)
-            // efface aussi le provisoire tapé en direct dans le champ.
-            handle = inline_preview_handle(&job.spec);
-            let _ = persist(job);
+            let error=if let Some(context)=inline{
+                if job.text.is_empty(){job.text=context.ticket.text;job.provisional=true;format!("Brouillon provisoire conservé, non validé par la transcription finale. {message}")}
+                else{format!("{} {message}",job.error.as_deref().unwrap_or("Texte conservé."))}
+            }else{message.clone()};
+            job.status = "error".into(); job.error = Some(error); let _ = persist(job);
         } else { runtime.last_error = Some(message.clone()); }
         if runtime.current.as_deref() == Some(id) { runtime.current = None; }
+        runtime.presentation.end_final(id);
         runtime.state.message = message;
-        handle
-    };
-    if let Some(h) = live_handle { crate::dictation_target::live_update(h, String::new(), true); }
+    }
     STOP_REQUESTED.store(true, Ordering::SeqCst);
     let handle = app.clone(); std::thread::spawn(move || { let _ = stop_impl(&handle, false); });
     publish(app);
 }
-fn finish_job(app: &AppHandle, id: &str, discarded: bool) {
+fn finish_job(app: &AppHandle, id: &str, action: &str) {
+    let discarded = action == "discard";
     let job = { let mut runtime = RUNTIME.lock().unwrap();
         let Some(index) = runtime.jobs.iter().position(|j| j.id == id) else { return; };
         let mut job = runtime.jobs.remove(index).unwrap();
         job.status = if discarded { "discarded" } else { "done" }.into();
         runtime.current = None; runtime.last_error = None; runtime.state.error = None;
-        if runtime.active.is_none(){runtime.state.partial.clear();} runtime.state.text = if discarded { String::new() } else { job.text.clone() };
-        runtime.state.message = if discarded { "Résultat écarté · audio conservé" } else { "Texte transmis · micro prêt" }.into();
+        runtime.presentation.end_final(id);
+        if !discarded { runtime.presentation.sent(&job.spec.id, action, &job.text); }
+        if runtime.active.is_none(){runtime.presentation.clear_preview();} runtime.state.text = if discarded { String::new() } else { job.text.clone() };
+        runtime.state.message = if discarded { "Résultat écarté · audio conservé" } else if runtime.active.is_some() { "Phrase transmise · écoute active" } else { "Texte transmis · micro prêt" }.into();
         job
     };
     // Mark completed before removing the journal: a failed remove is harmless.
@@ -683,41 +842,45 @@ fn audio_belongs_to_workspace(audio: &str, folder: &str) -> bool {
 }
 fn deliver(app: &AppHandle, id: &str, action: &str) -> Result<(), String> {
     let _delivery = DELIVERY.lock().map_err(|_| "Restitution verrouillée")?;
+    deliver_locked(app,id,action)
+}
+fn deliver_locked(app: &AppHandle, id: &str, action: &str) -> Result<(), String> {
     let mut job = { let runtime = RUNTIME.lock().unwrap(); runtime.jobs.iter().find(|j| j.id == id).cloned().ok_or("Résultat déjà traité")? };
     if job.spec.epoch != EPOCH.load(Ordering::SeqCst) { return Err("Cette transcription a été annulée.".into()); }
-    if action == "discard" { finish_job(app, id, true); return Ok(()); }
+    if action == "discard" { settle_manual_inline_locked(&job)?; finish_job(app, id, action); return Ok(()); }
     if job.text.trim().is_empty() { return Err("Aucun texte à transmettre. Réessaie la transcription ou écarte la prise.".into()); }
+    if job.provisional&&matches!(action,"auto"|"insert"){
+        return Err("Ce texte est encore un brouillon provisoire. Réessaie la transcription finale avant de l’insérer, ou utilise Copier après vérification.".into());
+    }
     job.status = "delivering".into(); persist(&job)?;
+    let inline_allowed={let runtime=RUNTIME.lock().unwrap();runtime.inline.can_commit(&job.spec.id,&job.id)};
     let result = match action {
         "copy" => arboard::Clipboard::new().map_err(|e| e.to_string()).and_then(|mut clipboard| clipboard.set_text(job.text.clone()).map_err(|e| e.to_string())),
         "note" => workspace::append_transcript(&job.spec.fallback.target(), &job.text, &job.id).map(|_| ()),
         "auto" | "insert" => match &job.spec.target {
             Target::Note { note } => workspace::append_transcript(&note.target(), &job.text, &job.id).map(|_| ()),
-            Target::Application { handle } if handle.is_empty() => {
-                Err("Le champ de saisie n’a pas été confirmé. Ton texte est conservé : utilise Copier.".into())
-            }
-            Target::Application { handle } if streams_phrases(&job.spec.kind, &job.spec.mode) => {
-                crate::dictation_target::insert_in_frozen_field(handle.clone(), format!("{} ", job.text.trim_end()))
-            }
-            Target::Application { handle } => crate::dictation_target::insert_at_cursor(handle.clone(), job.text.clone()),
+            Target::Application { handle } => if handle.is_empty(){Err("Le champ de saisie n’a pas été confirmé. Ton texte est conservé : utilise Copier.".into())}
+            else if !inline_allowed{Err("Le brouillon dans le champ a changé. La transcription finale est conservée ; vérifie le champ avant de recopier.".into())}
+            else{crate::dictation_target::insert_at_cursor(handle.clone(), if streams_phrases(&job.spec.kind,&job.spec.mode){format!("{} ",job.text.trim_end())}else{job.text.clone()})},
         },
         _ => Err("Action de restitution inconnue".into()),
     };
     match result {
-        Ok(()) => { finish_job(app, id, false); Ok(()) }
+        Ok(()) => {
+            if matches!(action,"auto"|"insert"){
+                clear_inline_context(&mut RUNTIME.lock().unwrap(),&job.spec.id,&job.id);
+            }else{settle_manual_inline_locked(&job)?;}
+            finish_job(app, id, action); Ok(())
+        }
         Err(error) => {
-            // Un provisoire tapé en direct ne doit pas survivre à un échec de
-            // restitution : il est effacé du champ, le texte reste dans Écho.
-            if matches!(action,"auto"|"insert") {
-                if let Some(handle) = inline_preview_handle(&job.spec) {
-                    crate::dictation_target::live_update(handle, String::new(), true);
-                }
-            }
             { let mut runtime = RUNTIME.lock().unwrap();
+                if matches!(action,"auto"|"insert"){
+                    if let Some(context)=runtime.inline_context.as_ref().filter(|c|c.ticket.phrase==id).cloned(){runtime.inline.rejected(context.ticket);}
+                }
                 if let Some(job) = runtime.jobs.iter_mut().find(|j| j.id == id) {
                     job.status = "result".into(); job.error = Some(error.clone()); let _ = persist(job);
                 }
-                runtime.current = None; runtime.state.message = "Texte conservé · choisis Copier ou Note".into();
+                runtime.current = None; runtime.presentation.end_final(id); runtime.state.message = "Texte conservé · choisis Copier ou Note".into();
             }
             STOP_REQUESTED.store(true, Ordering::SeqCst);
             let handle = app.clone(); std::thread::spawn(move || { let _ = stop_impl(&handle, false); });
@@ -736,49 +899,81 @@ fn worker_event(app: &AppHandle, event: Value) {
         "preloaded" => { RUNTIME.lock().unwrap().state.engine = "ready".into(); }
         "listening" => { let mut runtime = RUNTIME.lock().unwrap(); runtime.vad_ready = Some(id); }
         "listen_stopped" => { let mut runtime = RUNTIME.lock().unwrap(); runtime.sessions.remove(&id); if runtime.vad_ready.as_ref() == Some(&id) { runtime.vad_ready = None; } }
-        "speech_start" => { RUNTIME.lock().unwrap().speech = true; }
-        "speech_empty" => { RUNTIME.lock().unwrap().speech = false; }
+        "speech_start" => {
+            let session=event["session"].as_str().unwrap_or("");
+            let mut runtime=RUNTIME.lock().unwrap();
+            let spec=runtime.sessions.get(session).cloned();
+            if let Some(spec)=spec.filter(|spec|spec.epoch==EPOCH.load(Ordering::SeqCst)
+                &&(runtime.arming||runtime.active.as_ref().is_some_and(|a|a.spec.id==session))){
+                runtime.speech=true;
+                if uuid::Uuid::parse_str(&id).is_ok()&&runtime.inline.confirm_speech(session,spec.epoch,&id){
+                    runtime.phrase_audio=Some((id.clone(),capture::recordings_dir(Path::new(&spec.workspace)).join(format!("{id}.wav")).to_string_lossy().into()));
+                }
+            }
+        }
+        "speech_empty" => {
+            let session=event["session"].as_str().unwrap_or("");
+            let spec={let mut runtime=RUNTIME.lock().unwrap();
+                if runtime.active.as_ref().is_some_and(|a|a.spec.id==session){runtime.speech=false;}
+                runtime.sessions.get(session).cloned()
+            };
+            clear_empty_inline(app,session,&id);
+            if let Some(spec)=spec{preview_begin(&spec);}
+        }
         "utterance" => {
             let session = event["session"].as_str().unwrap_or("");
             let spec = { let mut runtime = RUNTIME.lock().unwrap(); runtime.speech = false; runtime.sessions.get(session).cloned() };
             if let Some(spec) = spec {
-                // Each durable phrase starts a fresh preview in the Écho interface.
+                // Each durable hands-free phrase starts a fresh provisional view.
                 if RUNTIME.lock().unwrap().active.as_ref().is_some_and(|a|a.spec.id==spec.id){preview_begin(&spec);}
                 let path = event["path"].as_str().unwrap_or("").to_string();
                 if !audio_belongs_to_workspace(&path, &spec.workspace) { job_error(app, &id, "Le moteur a renvoyé un chemin audio inattendu.".into()); return; }
                 if event["cancelled"].as_bool().unwrap_or(false) { let _ = app.emit("recordings:changed", ()); return; }
                 queue_job(app, Job { id, spec, audio_path: path,
-                    duration_secs: event["duration_secs"].as_f64().unwrap_or(0.0), status: "queued".into(), text: String::new(), error: None });
+                    duration_secs: event["duration_secs"].as_f64().unwrap_or(0.0), status: "queued".into(), text: String::new(), error: None, provisional: false });
             }
         }
         "started" | "progress" => {
             let mut runtime = RUNTIME.lock().unwrap();
             if runtime.jobs.iter().any(|j| j.id == id && j.spec.epoch == EPOCH.load(Ordering::SeqCst) && j.status == "transcribing") {
                 runtime.state.progress = event["progress"].as_f64();
-                runtime.state.partial = event["text"].as_str().unwrap_or("").into();
+                runtime.presentation.final_progress(&id, event["text"].as_str().unwrap_or(""));
             }
         }
         "result" => {
+            // Result journaling and final replacement form one cancellation
+            // boundary; a late result cannot recreate a cancelled journal.
+            let delivery=DELIVERY.lock().unwrap();
             let text = event["text"].as_str().unwrap_or("").trim().to_string();
             let job = { let mut runtime = RUNTIME.lock().unwrap();
                 let Some(job) = runtime.jobs.iter_mut().find(|j| j.id == id && j.status == "transcribing" && j.spec.epoch == EPOCH.load(Ordering::SeqCst)) else { return; };
-                job.text = text; job.status = "result".into();
+                job.text = text; job.provisional=false; job.status = "result".into();
                 if job.text.is_empty() { job.error = Some("Aucune parole détectée. L'audio reste disponible.".into()); }
                 let copy = job.clone(); runtime.current = None; copy
             };
-            if let Err(error) = persist(&job) { job_error(app, &id, error); return; }
+            if let Err(error) = persist(&job) { drop(delivery); job_error(app, &id, error); return; }
             if !job.text.is_empty() {
-                if let Err(error) = deliver(app, &id, "auto") {
+                let outcome=deliver_locked(app,&id,"auto");
+                drop(delivery);
+                if let Err(error) = outcome {
                     // deliver has already exposed target failures. Journal
                     // failures occur before that boundary and need surfacing.
                     if RUNTIME.lock().unwrap().jobs.iter().any(|j| j.id == id && j.spec.epoch == EPOCH.load(Ordering::SeqCst) && j.error.is_none()) { job_error(app, &id, error); }
                 }
-            } else { job_error(app, &id, "Aucune parole détectée. Réessaie ou écarte cette prise.".into()); }
+            } else {
+                drop(delivery);
+                clear_empty_inline(app,&job.spec.id,&id);
+                job_error(app, &id, "Aucune parole détectée. Réessaie ou écarte cette prise.".into());
+            }
         }
         "error" => {
             let error = event["message"].as_str().unwrap_or("Le moteur a rencontré une erreur.").to_owned();
             let relevant = { let runtime = RUNTIME.lock().unwrap(); id.starts_with("preload-") || runtime.sessions.contains_key(&id) || runtime.jobs.iter().any(|j| j.id == id && j.spec.epoch == EPOCH.load(Ordering::SeqCst)) };
-            if relevant { if id.starts_with("preload-") { RUNTIME.lock().unwrap().state.engine = "error".into(); } job_error(app, &id, error); }
+            if relevant {
+                preserve_inline_on_engine_failure(Some(&id),&error);
+                if id.starts_with("preload-") { RUNTIME.lock().unwrap().state.engine = "error".into(); }
+                job_error(app, &id, error);
+            }
         }
         _ => (),
     }
@@ -809,29 +1004,37 @@ pub async fn voice_stop(app: AppHandle) -> Result<VoiceState, String> {
     Ok(snapshot())
 }
 fn cancel_impl(app: &AppHandle) -> Result<(), String> {
-    // An insertion already in its native transaction may finish; cancellation
-    // is acknowledged only after it, and no subsequent result can be inserted.
+    // An already executing native transaction may finish. Remove only its own
+    // verified draft, then acknowledge cancellation; committed phrases remain.
     let delivery = DELIVERY.lock().map_err(|_| "Restitution verrouillée")?;
-    let (jobs, live_handle) = { let mut runtime = RUNTIME.lock().unwrap(); runtime.current = None; runtime.last_error = None;
-        runtime.state.text.clear(); runtime.state.partial.clear(); runtime.state.message = "Annulé · audio conservé".into();
-        // Le provisoire tapé en direct est effacé du champ lors d'une annulation.
-        let handle = runtime.active.as_ref().and_then(|a| inline_preview_handle(&a.spec));
-        (runtime.jobs.drain(..).collect::<Vec<_>>(), handle)
+    let removal=discard_inline_locked(None);
+    let (jobs,recovery)={
+        let mut runtime=RUNTIME.lock().unwrap();
+        let recovery=removal.as_ref().err().and_then(|error|runtime.inline_context.as_ref().map(|context|
+            inline_recovery_job(context,runtime.jobs.iter().find(|j|j.id==context.ticket.phrase),error,EPOCH.load(Ordering::SeqCst))));
+        runtime.current=None;runtime.last_error=None;runtime.state.text.clear();
+        runtime.presentation.cancel();runtime.inline.end_capture();
+        runtime.state.message=if recovery.is_some(){"Annulé · brouillon conservé pour vérification"}else{"Annulé · audio conservé"}.into();
+        (runtime.jobs.drain(..).collect::<Vec<_>>(),recovery)
     };
-    if let Some(worker) = WORKER.lock().unwrap().clone() {
-        for job in &jobs {
-            if job.status == "transcribing" { CANCEL_WAIT.lock().unwrap().insert(job.id.clone(), Instant::now()); }
-            let _ = worker.send(json!({"op":"cancel","id":job.id}));
+    if let Some(worker)=WORKER.lock().unwrap().clone(){
+        for job in &jobs{
+            if job.status=="transcribing"{CANCEL_WAIT.lock().unwrap().insert(job.id.clone(),Instant::now());}
+            let _=worker.send(json!({"op":"cancel","id":job.id}));
         }
     }
-    for mut job in jobs {
-        job.status = "cancelled".into();
-        if persist(&job).is_ok() { let _ = fs::remove_file(job_dir().join(format!("{}.json", job.id))); }
+    for mut job in jobs{
+        if recovery.as_ref().is_some_and(|kept|kept.id==job.id){continue}
+        job.status="cancelled".into();
+        if persist(&job).is_ok(){let _=fs::remove_file(job_dir().join(format!("{}.json",job.id)));}
+    }
+    if let Some(mut job)=recovery{
+        if let Err(error)=persist(&job){job.error=Some(format!("{} {error}",job.error.as_deref().unwrap_or("Brouillon conservé.")));}
+        RUNTIME.lock().unwrap().jobs.push_back(job);
     }
     drop(delivery);
-    stop_impl(app, true)?;
-    if let Some(h) = live_handle { crate::dictation_target::live_update(h, String::new(), true); }
-    publish(app); Ok(())
+    stop_impl(app,true)?;
+    publish(app);Ok(())
 }
 #[tauri::command]
 pub async fn voice_cancel(app: AppHandle) -> Result<VoiceState, String> {
@@ -878,7 +1081,6 @@ pub async fn voice_preload(app: AppHandle) -> Result<VoiceState, String> {
     RUNTIME.lock().unwrap().state.engine = "loading".into(); publish(&app); Ok(snapshot())
 }
 
-/// Global shortcut callback. It never opens or focuses a window.
 fn shortcut_mode(configured:&str,key:&str)->String {
     if !key.contains('+') {"handsfree".into()} else {configured.into()}
 }
@@ -920,9 +1122,7 @@ pub fn init(app: &AppHandle) {
         for mut job in recovered {
             if uuid::Uuid::parse_str(&job.id).is_err() { continue; }
             if matches!(job.status.as_str(), "done" | "cancelled" | "discarded") { continue; }
-            job.spec.epoch = EPOCH.load(Ordering::SeqCst);
-            job.status = if job.text.is_empty() { "error" } else { "result" }.into();
-            job.error = Some(if job.text.is_empty() { "Prise retrouvée après redémarrage. Réessaie la transcription." } else { "Texte retrouvé. Vérifie la destination avant de le recopier." }.into());
+            job=restore_job(job,EPOCH.load(Ordering::SeqCst));
             RUNTIME.lock().unwrap().jobs.push_back(job);
         }
     }
@@ -946,6 +1146,7 @@ pub fn init(app: &AppHandle) {
                     runtime.state.engine = "cold".into();
                     for job in runtime.jobs.iter_mut().filter(|job| job.status == "transcribing") { job.status = "queued".into(); let _ = persist(job); }
                     runtime.current = None;
+                    runtime.presentation.cancel();
                     runtime.state.message = "Moteur libéré après annulation".into();
                 }
                 dispatch_next(&handle); publish(&handle);
@@ -962,7 +1163,7 @@ pub fn shutdown() {
     crate::dictation_target::cancel_pending();
     START_SEQUENCE.fetch_add(1, Ordering::SeqCst);
     SHUTDOWN.store(true, Ordering::SeqCst); EPOCH.fetch_add(1, Ordering::SeqCst); STOP_REQUESTED.store(true, Ordering::SeqCst);
-    if let Some(app) = APP.get() { let _ = stop_impl(app, true); }
+    if let Some(app) = APP.get() { let _ = cancel_impl(app); }
     if let Some(worker) = WORKER.lock().unwrap().take() { let _ = worker.send(json!({"op":"shutdown"})); worker.kill(); }
     preview_cleanup_all();
 }
@@ -992,20 +1193,18 @@ mod tests {
         Job { id: "operation-stable".into(), spec: SessionSpec { id: "session".into(), mode: "hold".into(), kind: "dictation".into(),
             workspace: note.workspace.clone(), target: Target::Note { note: note.clone() }, fallback: note,
             target_label: "premier.md".into(), python: "python".into(), model: "small".into(), language: "fr".into(), keep_audio: false, epoch: 7, hotwords: String::new() },
-            audio_path: "D:/original/.echo/audio/prise.wav".into(), duration_secs: 2.0, status: "queued".into(), text: "Écho, été, œuf.".into(), error: None }
+            audio_path: "D:/original/.echo/audio/prise.wav".into(), duration_secs: 2.0, status: "queued".into(), text: "Écho, été, œuf.".into(), error: None, provisional: false }
     }
     #[test]
-    fn preview_only_runs_for_an_expanded_visible_text_view(){
-        for interested in [false,true]{for visible in [false,true]{for minimized in [false,true]{
-            assert_eq!(preview_view_needed(interested,visible,minimized),interested&&visible&&!minimized);
-        }}}
+    fn preview_buffers_audio_while_final_work_takes_priority(){
         let mut preview=preview_sample();let now=preview.last_sent;
-        assert!(!preview_ready(&mut preview,&vec![100;32000],now+Duration::from_secs(2),false));
+
+        assert!(!preview_ready(&mut preview,&vec![100;32000],now+Duration::from_secs(2),true));
         assert_eq!(preview.samples,32000);assert_eq!(preview.audio.len(),32000);
-        assert!(preview_ready(&mut preview,&[200;3200],now+Duration::from_secs(3),true));
+        assert!(preview_ready(&mut preview,&[200;3200],now+Duration::from_secs(3),false));
     }
     fn preview_sample()->PreviewCapture{
-        PreviewCapture{spec:sample_job().spec,audio:VecDeque::new(),samples:0,last_sent:Instant::now(),inflight:None,prefix:String::new(),prefix_end:0.0,words:vec![]}
+        PreviewCapture{spec:sample_job().spec,generation:1,audio:VecDeque::new(),samples:0,last_sent:Instant::now(),inflight:None,prefix:String::new(),prefix_end:0.0,words:vec![]}
     }
     #[test]
     fn retained_result_or_error_does_not_hide_an_open_microphone() {
@@ -1030,13 +1229,14 @@ mod tests {
     #[test]
     fn pcm_preview_is_ready_before_stop_and_only_one_decode_can_be_in_flight(){
         let mut preview=preview_sample();let now=preview.last_sent;
-        assert!(!preview_ready(&mut preview,&vec![100;8000],now+Duration::from_millis(500),true));
-        assert!(preview_ready(&mut preview,&vec![200;24000],now+Duration::from_secs(2),true));
+
+        assert!(!preview_ready(&mut preview,&vec![100;8000],now+Duration::from_millis(500),false));
+        assert!(preview_ready(&mut preview,&vec![200;24000],now+Duration::from_secs(2),false));
         preview.inflight=Some("preview-test".into());
-        assert!(!preview_ready(&mut preview,&vec![300;400000],now+Duration::from_secs(20),true));
+        assert!(!preview_ready(&mut preview,&vec![300;400000],now+Duration::from_secs(20),false));
         assert_eq!(preview.audio.len(),PREVIEW_SAMPLES);
         preview.inflight=None;
-        assert!(preview_ready(&mut preview,&[400;3200],now+Duration::from_secs(21),true));
+        assert!(preview_ready(&mut preview,&[400;3200],now+Duration::from_secs(21),false));
         assert_eq!(preview.audio.back(),Some(&400));
         assert_eq!(preview.spec.fallback.path,"premier.md");
     }
@@ -1051,18 +1251,121 @@ mod tests {
     #[test]
     fn previous_session_epoch_and_old_preview_revision_are_rejected(){
         let mut preview=preview_sample();preview.inflight=Some("preview-current".into());
-        let job=PreviewJob{session:preview.spec.id.clone(),epoch:7,start:0.0,path:PathBuf::new()};
+        let job=PreviewJob{session:preview.spec.id.clone(),epoch:7,generation:1,speech_phrase:None,start:0.0,path:PathBuf::new()};
         assert!(preview_matches(&preview,&job,"preview-current",7));
         assert!(!preview_matches(&preview,&job,"preview-old",7));
         assert!(!preview_matches(&preview,&job,"preview-current",8));
+        let old_phrase=PreviewJob{generation:0,..job.clone()};
+        assert!(!preview_matches(&preview,&old_phrase,"preview-current",7));
         let wrong=PreviewJob{session:"new-session".into(),..job};
         assert!(!preview_matches(&preview,&wrong,"preview-current",7));
+    }
+    fn sample_inline_context()->InlineContext{
+        let mut spec=sample_job().spec;spec.kind="dictation".into();spec.mode="toggle".into();
+        spec.target=Target::Application{handle:"frozen-field-token".into()};
+        InlineContext{ticket:InlineTicket{session:spec.id.clone(),epoch:7,generation:1,phrase:"phrase".into(),text:"Aperçu provisoire".into()},
+            spec,audio_path:"D:/original/.echo/audio/phrase.wav".into()}
+    }
+    #[test]
+    fn late_or_duplicate_utterance_never_overwrites_retained_recovery_journal(){
+        let directory=std::env::temp_dir().join(format!("echo-inline-journal-{}",uuid::Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();let path=directory.join("phrase.json");
+        let context=sample_inline_context();let kept=inline_recovery_job(&context,None,"Vérification",8);
+        let saved=serde_json::to_vec(&kept).unwrap();fs::write(&path,&saved).unwrap();
+        for (epoch,known) in [(7,true),(8,true),(7,false)]{
+            let mut delayed=sample_job();delayed.id="phrase".into();delayed.text.clear();delayed.spec.epoch=epoch;
+            let result=prepare_queued_job(delayed,8,known,|job|{
+                fs::write(&path,serde_json::to_vec(job).unwrap()).map_err(|e|e.to_string())
+            });
+            assert!(result.is_none());assert_eq!(fs::read(&path).unwrap(),saved);
+        }
+        fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn cancellation_recovery_preserves_draft_identity_target_and_audio_without_calling_it_final(){
+        let context=sample_inline_context();
+        let kept=inline_recovery_job(&context,None,"Garde native",8);
+        assert_eq!(kept.id,"phrase");assert_eq!(kept.text,"Aperçu provisoire");
+        assert_eq!(kept.spec.epoch,8);assert_eq!(kept.status,"result");
+        assert_eq!(kept.audio_path,context.audio_path);assert!(kept.provisional);assert!(kept.error.unwrap().contains("Brouillon provisoire"));
+        assert!(matches!(kept.spec.target,Target::Application{handle} if handle=="frozen-field-token"));
+    }
+    #[test]
+    fn inline_recovery_never_replaces_an_available_small_final_with_base_preview(){
+        let context=sample_inline_context();let mut final_job=sample_job();
+        final_job.id="phrase".into();final_job.text="Transcription finale précise.".into();
+        let kept=inline_recovery_job(&context,Some(&final_job),"Garde native",8);
+        assert_eq!(kept.text,final_job.text);assert_eq!(kept.audio_path,final_job.audio_path);
+        assert!(!kept.provisional);assert!(kept.error.unwrap().starts_with("Texte final conservé."));
+    }
+    #[test]
+    fn repeated_recovery_and_restart_never_promote_base_draft_to_final(){
+        let context=sample_inline_context();
+        let first=inline_recovery_job(&context,None,"Champ modifié",8);
+        let second=inline_recovery_job(&context,Some(&first),"Nouvel essai",9);
+        assert!(second.provisional);assert_eq!(second.text,"Aperçu provisoire");
+        assert!(second.error.as_ref().unwrap().starts_with("Brouillon provisoire"));
+        let encoded=serde_json::to_vec(&second).unwrap();
+        let restored=restore_job(serde_json::from_slice(&encoded).unwrap(),10);
+        assert!(restored.provisional);assert_eq!(restored.spec.epoch,10);
+        assert!(restored.error.as_ref().unwrap().starts_with("Brouillon provisoire retrouvé"));
+    }
+    #[test]
+    fn older_journals_default_to_final_text_and_keep_recovery_behavior(){
+        let mut value=serde_json::to_value(sample_job()).unwrap();
+        value.as_object_mut().unwrap().remove("provisional");
+        let restored=restore_job(serde_json::from_value(value).unwrap(),8);
+        assert!(!restored.provisional);assert_eq!(restored.text,"Écho, été, œuf.");
+        assert_eq!(restored.status,"result");assert!(restored.error.unwrap().starts_with("Texte retrouvé."));
+    }
+    #[test]
+    fn provisional_native_write_does_not_increment_finalized_phrase_count(){
+        let mut runtime=Runtime::default();runtime.presentation.begin_session("session");
+        runtime.presentation.sent("session","auto","Phrase finalisée.");
+        runtime.inline.begin_session("session",7);runtime.inline.next_phrase("session",7,1);
+        runtime.inline.confirm_speech("session",7,"phrase");
+        let ticket=runtime.inline.propose("session",7,1,"Aperçu",false,Some("phrase")).unwrap();
+        runtime.inline.applied(ticket);refresh(&mut runtime);
+        assert!(runtime.state.inline_preview_supported);assert!(runtime.state.inline_preview_active);
+        assert_eq!(runtime.state.sent_count,1);assert_eq!(runtime.state.last_sent_text,"Phrase finalisée.");
+        runtime.inline.end_capture();runtime.presentation.cancel();refresh(&mut runtime);
+        assert_eq!(runtime.state.sent_count,1);assert!(runtime.state.inline_preview_active);
+        runtime.inline.resolved("session","phrase");refresh(&mut runtime);
+        assert!(!runtime.state.inline_preview_active);assert_eq!(runtime.state.sent_count,1);
     }
     #[test]
     fn old_voice_journal_remains_readable_without_new_hotwords_field(){
         let mut value=serde_json::to_value(sample_job()).unwrap();value["spec"].as_object_mut().unwrap().remove("hotwords");
         let restored:Job=serde_json::from_value(value).unwrap();
         assert!(restored.spec.hotwords.is_empty());assert_eq!(restored.spec.fallback.path,"premier.md");
+    }
+
+    #[test]
+    fn old_voice_state_remains_readable_without_presentation_fields(){
+        let mut value=serde_json::to_value(VoiceState::default()).unwrap();
+        for key in ["finalizing_text","finalizing_id","last_sent_text","sent_count","inline_preview_supported","inline_preview_active"] {
+            value.as_object_mut().unwrap().remove(key);
+        }
+        let restored:VoiceState=serde_json::from_value(value).unwrap();
+        assert!(restored.finalizing_text.is_empty());assert!(restored.finalizing_id.is_none());
+        assert!(restored.last_sent_text.is_empty());assert_eq!(restored.sent_count,0);
+        assert!(!restored.inline_preview_supported);assert!(!restored.inline_preview_active);
+    }
+
+    #[test]
+    fn runtime_snapshot_keeps_preview_finalization_and_sent_text_separate(){
+        let mut runtime=Runtime::default();
+        runtime.presentation.begin_session("session");
+        runtime.presentation.preview("session","Nouvelle phrase".into());
+        runtime.presentation.begin_final("previous");
+        runtime.presentation.final_progress("previous","Phrase précédente.");
+        runtime.presentation.sent("session","auto","Déjà transmise.");
+        refresh(&mut runtime);
+        assert_eq!(runtime.state.partial,"Nouvelle phrase");
+        assert_eq!(runtime.state.finalizing_text,"Phrase précédente.");
+        assert_eq!(runtime.state.finalizing_id.as_deref(),Some("previous"));
+        assert_eq!(runtime.state.last_sent_text,"Déjà transmise.");
+        assert_eq!(runtime.state.sent_count,1);
     }
 
     #[test]
