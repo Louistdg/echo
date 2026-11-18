@@ -1,0 +1,32 @@
+{
+  "complete": true,
+  "at_utc": "2026-10-21T04:41:02.917231+00:00",
+  "artifacts": [
+    {
+      "path": "D:\\Écho V3\\Écho V3.exe",
+      "bytes": 25789952,
+      "sha256": "771c809d868c89c1a7f7702e2a46ccb3a7ad66075923ffdfacce08ca591fecd7"
+    },
+    {
+      "path": "D:\\Écho V3\\installateur\\Écho V3_3.0.0_x64-setup.exe",
+      "bytes": 794429912,
+      "sha256": "f741aa3c06a0fca60a6506632e0e940725ed38ee3b9b52441b2a57d31484bda4"
+    }
+  ],
+  "qa_sha256": "771c809d868c89c1a7f7702e2a46ccb3a7ad66075923ffdfacce08ca591fecd7",
+  "app_closed": true,
+  "debug_port_closed": true,
+  "qa_configuration_archived": "D:\\Écho V3\\docs\\qa\\configuration-fin-tests",
+  "partial_caches_removed": [
+    "D:\\Écho V3\\application\\src-tauri\\target",
+    "D:\\Écho V3\\application\\src-tauri\\target-v3"
+  ],
+  "v21_source_baseline_unchanged": true,
+  "limits": [
+    "Insertion externe non validée dans cette session : Windows a refusé le premier plan de la fixture ; aucune insertion tentée.",
+    "Aperçu vocal implémenté mais délai et exactitude sur parole réelle non mesurés.",
+    "OCR anglais effectué avec le modèle français Windows : PTS-125 espacé en PTS-1 25 ; montant et négation conservés.",
+    "Runtime Python et modèles Whisper présents sur ce PC, non embarqués pour un autre PC.",
+    "Installateur généré et vérifié par SHA, installation/désinstallation Windows non exécutées."
+  ]
+}

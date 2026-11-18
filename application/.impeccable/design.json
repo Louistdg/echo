@@ -1,0 +1,504 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-20T23:04:00.228Z",
+  "title": "Design System: Écho V2.1",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "bg",
+        "tonalRamp": [
+          "oklch(15.00% 0.00413 271.37)",
+          "oklch(26.43% 0.00413 271.37)",
+          "oklch(37.86% 0.00413 271.37)",
+          "oklch(49.29% 0.00413 271.37)",
+          "oklch(60.71% 0.00413 271.37)",
+          "oklch(72.14% 0.00413 271.37)",
+          "oklch(83.57% 0.00413 271.37)",
+          "oklch(95.00% 0.00413 271.37)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "sidebar",
+        "tonalRamp": [
+          "oklch(15.00% 0.00676 277.16)",
+          "oklch(26.43% 0.00676 277.16)",
+          "oklch(37.86% 0.00676 277.16)",
+          "oklch(49.29% 0.00676 277.16)",
+          "oklch(60.71% 0.00676 277.16)",
+          "oklch(72.14% 0.00676 277.16)",
+          "oklch(83.57% 0.00676 277.16)",
+          "oklch(95.00% 0.00676 277.16)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "text",
+        "tonalRamp": [
+          "oklch(15.00% 0.03694 283.65)",
+          "oklch(26.43% 0.03694 283.65)",
+          "oklch(37.86% 0.03694 283.65)",
+          "oklch(49.29% 0.03694 283.65)",
+          "oklch(60.71% 0.03694 283.65)",
+          "oklch(72.14% 0.03694 283.65)",
+          "oklch(83.57% 0.03694 283.65)",
+          "oklch(95.00% 0.03694 283.65)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.02987 285.29)",
+          "oklch(26.43% 0.02987 285.29)",
+          "oklch(37.86% 0.02987 285.29)",
+          "oklch(49.29% 0.02987 285.29)",
+          "oklch(60.71% 0.02987 285.29)",
+          "oklch(72.14% 0.02987 285.29)",
+          "oklch(83.57% 0.02987 285.29)",
+          "oklch(95.00% 0.02987 285.29)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "border",
+        "tonalRamp": [
+          "oklch(15.00% 0.01240 276.08)",
+          "oklch(26.43% 0.01240 276.08)",
+          "oklch(37.86% 0.01240 276.08)",
+          "oklch(49.29% 0.01240 276.08)",
+          "oklch(60.71% 0.01240 276.08)",
+          "oklch(72.14% 0.01240 276.08)",
+          "oklch(83.57% 0.01240 276.08)",
+          "oklch(95.00% 0.01240 276.08)"
+        ]
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.01079 280.47)",
+          "oklch(26.43% 0.01079 280.47)",
+          "oklch(37.86% 0.01079 280.47)",
+          "oklch(49.29% 0.01079 280.47)",
+          "oklch(60.71% 0.01079 280.47)",
+          "oklch(72.14% 0.01079 280.47)",
+          "oklch(83.57% 0.01079 280.47)",
+          "oklch(95.00% 0.01079 280.47)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.16497 285.39)",
+          "oklch(26.43% 0.16497 285.39)",
+          "oklch(37.86% 0.16497 285.39)",
+          "oklch(49.29% 0.16497 285.39)",
+          "oklch(60.71% 0.16497 285.39)",
+          "oklch(72.14% 0.16497 285.39)",
+          "oklch(83.57% 0.16497 285.39)",
+          "oklch(95.00% 0.16497 285.39)"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "accent-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.14960 285.41)",
+          "oklch(26.43% 0.14960 285.41)",
+          "oklch(37.86% 0.14960 285.41)",
+          "oklch(49.29% 0.14960 285.41)",
+          "oklch(60.71% 0.14960 285.41)",
+          "oklch(72.14% 0.14960 285.41)",
+          "oklch(83.57% 0.14960 285.41)",
+          "oklch(95.00% 0.14960 285.41)"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "accent-soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.02703 295.05)",
+          "oklch(26.43% 0.02703 295.05)",
+          "oklch(37.86% 0.02703 295.05)",
+          "oklch(49.29% 0.02703 295.05)",
+          "oklch(60.71% 0.02703 295.05)",
+          "oklch(72.14% 0.02703 295.05)",
+          "oklch(83.57% 0.02703 295.05)",
+          "oklch(95.00% 0.02703 295.05)"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "on-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "danger",
+        "tonalRamp": [
+          "oklch(15.00% 0.17440 15.92)",
+          "oklch(26.43% 0.17440 15.92)",
+          "oklch(37.86% 0.17440 15.92)",
+          "oklch(49.29% 0.17440 15.92)",
+          "oklch(60.71% 0.17440 15.92)",
+          "oklch(72.14% 0.17440 15.92)",
+          "oklch(83.57% 0.17440 15.92)",
+          "oklch(95.00% 0.17440 15.92)"
+        ]
+      },
+      "on-danger": {
+        "role": "status",
+        "displayName": "on-danger",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "danger-soft": {
+        "role": "status",
+        "displayName": "danger-soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.01989 5.98)",
+          "oklch(26.43% 0.01989 5.98)",
+          "oklch(37.86% 0.01989 5.98)",
+          "oklch(49.29% 0.01989 5.98)",
+          "oklch(60.71% 0.01989 5.98)",
+          "oklch(72.14% 0.01989 5.98)",
+          "oklch(83.57% 0.01989 5.98)",
+          "oklch(95.00% 0.01989 5.98)"
+        ]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "success",
+        "tonalRamp": [
+          "oklch(15.00% 0.10050 157.56)",
+          "oklch(26.43% 0.10050 157.56)",
+          "oklch(37.86% 0.10050 157.56)",
+          "oklch(49.29% 0.10050 157.56)",
+          "oklch(60.71% 0.10050 157.56)",
+          "oklch(72.14% 0.10050 157.56)",
+          "oklch(83.57% 0.10050 157.56)",
+          "oklch(95.00% 0.10050 157.56)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.00837 271.32)",
+          "oklch(26.43% 0.00837 271.32)",
+          "oklch(37.86% 0.00837 271.32)",
+          "oklch(49.29% 0.00837 271.32)",
+          "oklch(60.71% 0.00837 271.32)",
+          "oklch(72.14% 0.00837 271.32)",
+          "oklch(83.57% 0.00837 271.32)",
+          "oklch(95.00% 0.00837 271.32)"
+        ]
+      },
+      "nuit-accent": {
+        "role": "primary",
+        "displayName": "nuit-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.12738 290.73)",
+          "oklch(26.43% 0.12738 290.73)",
+          "oklch(37.86% 0.12738 290.73)",
+          "oklch(49.29% 0.12738 290.73)",
+          "oklch(60.71% 0.12738 290.73)",
+          "oklch(72.14% 0.12738 290.73)",
+          "oklch(83.57% 0.12738 290.73)",
+          "oklch(95.00% 0.12738 290.73)"
+        ]
+      },
+      "ocean-accent": {
+        "role": "primary",
+        "displayName": "ocean-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.09640 231.39)",
+          "oklch(26.43% 0.09640 231.39)",
+          "oklch(37.86% 0.09640 231.39)",
+          "oklch(49.29% 0.09640 231.39)",
+          "oklch(60.71% 0.09640 231.39)",
+          "oklch(72.14% 0.09640 231.39)",
+          "oklch(83.57% 0.09640 231.39)",
+          "oklch(95.00% 0.09640 231.39)"
+        ]
+      },
+      "foret-accent": {
+        "role": "primary",
+        "displayName": "foret-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.08837 165.54)",
+          "oklch(26.43% 0.08837 165.54)",
+          "oklch(37.86% 0.08837 165.54)",
+          "oklch(49.29% 0.08837 165.54)",
+          "oklch(60.71% 0.08837 165.54)",
+          "oklch(72.14% 0.08837 165.54)",
+          "oklch(83.57% 0.08837 165.54)",
+          "oklch(95.00% 0.08837 165.54)"
+        ]
+      },
+      "violet-accent": {
+        "role": "primary",
+        "displayName": "violet-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.15173 297.64)",
+          "oklch(26.43% 0.15173 297.64)",
+          "oklch(37.86% 0.15173 297.64)",
+          "oklch(49.29% 0.15173 297.64)",
+          "oklch(60.71% 0.15173 297.64)",
+          "oklch(72.14% 0.15173 297.64)",
+          "oklch(83.57% 0.15173 297.64)",
+          "oklch(95.00% 0.15173 297.64)"
+        ]
+      },
+      "rose-accent": {
+        "role": "primary",
+        "displayName": "rose-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.14081 356.11)",
+          "oklch(26.43% 0.14081 356.11)",
+          "oklch(37.86% 0.14081 356.11)",
+          "oklch(49.29% 0.14081 356.11)",
+          "oklch(60.71% 0.14081 356.11)",
+          "oklch(72.14% 0.14081 356.11)",
+          "oklch(83.57% 0.14081 356.11)",
+          "oklch(95.00% 0.14081 356.11)"
+        ]
+      },
+      "ambre-accent": {
+        "role": "primary",
+        "displayName": "ambre-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.10461 66.42)",
+          "oklch(26.43% 0.10461 66.42)",
+          "oklch(37.86% 0.10461 66.42)",
+          "oklch(49.29% 0.10461 66.42)",
+          "oklch(60.71% 0.10461 66.42)",
+          "oklch(72.14% 0.10461 66.42)",
+          "oklch(83.57% 0.10461 66.42)",
+          "oklch(95.00% 0.10461 66.42)"
+        ]
+      },
+      "aurore-accent": {
+        "role": "primary",
+        "displayName": "aurore-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.14271 33.39)",
+          "oklch(26.43% 0.14271 33.39)",
+          "oklch(37.86% 0.14271 33.39)",
+          "oklch(49.29% 0.14271 33.39)",
+          "oklch(60.71% 0.14271 33.39)",
+          "oklch(72.14% 0.14271 33.39)",
+          "oklch(83.57% 0.14271 33.39)",
+          "oklch(95.00% 0.14271 33.39)"
+        ]
+      },
+      "nuit-on-danger": {
+        "role": "status",
+        "displayName": "nuit-on-danger",
+        "tonalRamp": [
+          "oklch(15.00% 0.07098 8.92)",
+          "oklch(26.43% 0.07098 8.92)",
+          "oklch(37.86% 0.07098 8.92)",
+          "oklch(49.29% 0.07098 8.92)",
+          "oklch(60.71% 0.07098 8.92)",
+          "oklch(72.14% 0.07098 8.92)",
+          "oklch(83.57% 0.07098 8.92)",
+          "oklch(95.00% 0.07098 8.92)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "Interface",
+        "purpose": "Texte courant des outils Windows."
+      },
+      "note": {
+        "displayName": "Page de note",
+        "purpose": "Lecture et saisie du document."
+      },
+      "label": {
+        "displayName": "Commande",
+        "purpose": "Boutons et actions de l’interface."
+      }
+    },
+    "shadows": [
+      {
+        "name": "note-action-menu",
+        "value": "0 8px 30px rgb(0 0 0 / .15)",
+        "purpose": "Menu d’actions superposé au document."
+      },
+      {
+        "name": "capture-image",
+        "value": "0 4px 20px #15182924",
+        "purpose": "Image posée dans l’éditeur de capture."
+      },
+      {
+        "name": "annotation-actions",
+        "value": "0 4px 12px #0003",
+        "purpose": "Actions locales superposées aux objets."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-colors",
+        "value": "140ms ease-out",
+        "purpose": "Couleurs du fond, du texte et des bordures des boutons."
+      },
+      {
+        "name": "microphone-meter",
+        "value": "60ms linear",
+        "purpose": "Mise à jour de la largeur du vumètre."
+      },
+      {
+        "name": "reduced-motion",
+        "value": ".01ms",
+        "purpose": "Durée des animations et transitions si la préférence système le demande."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop-compact",
+        "value": "760px"
+      },
+      {
+        "name": "notes-condensed",
+        "value": "900px"
+      },
+      {
+        "name": "capture-condensed",
+        "value": "1050px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Action principale d’une zone de travail.",
+      "html": "<button class=\"ds-primary\">Enregistrer</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:7px 12px;border:1px solid var(--border,#dddfe8);border-radius:var(--radius,8px);font:500 13px 'Segoe UI Variable','Segoe UI',sans-serif;cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out,border-color 140ms ease-out;background:var(--accent,#5d4dba);border-color:var(--accent,#5d4dba);color:var(--on-accent,#fff)}.ds-primary:hover:not(:disabled){background:var(--accent-hover,#4c3d9d);border-color:var(--accent-hover,#4c3d9d)}.ds-primary:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-primary:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-primary{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Bouton secondaire",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Action disponible sans emphase principale.",
+      "html": "<button class=\"ds-secondary\">Ouvrir le dossier</button>",
+      "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:7px 12px;border:1px solid var(--border,#dddfe8);border-radius:var(--radius,8px);font:500 13px 'Segoe UI Variable','Segoe UI',sans-serif;cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out,border-color 140ms ease-out;background:var(--surface,#fff);color:var(--text,#242438)}.ds-secondary:hover:not(:disabled){background:var(--hover,#e9eaf2)}.ds-secondary:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-secondary:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-secondary{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Bouton fantôme",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Commande discrète d’une barre d’outils.",
+      "html": "<button class=\"ds-ghost\">Ouvrir les notes</button>",
+      "css": ".ds-ghost{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:7px 12px;border:1px solid var(--border,#dddfe8);border-radius:var(--radius,8px);font:500 13px 'Segoe UI Variable','Segoe UI',sans-serif;cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out,border-color 140ms ease-out;background:transparent;border-color:transparent;color:var(--muted,#646477)}.ds-ghost:hover:not(:disabled){background:var(--hover,#e9eaf2);color:var(--text,#242438)}.ds-ghost:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-ghost:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-ghost{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Champ",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Saisie dans les réglages.",
+      "html": "<label class=\"ds-label\" for=\"ds-model\">Modèle local</label><input class=\"ds-field\" id=\"ds-model\" value=\"small\"/>",
+      "css": ".ds-label{display:block;font:600 12px 'Segoe UI',sans-serif;margin-bottom:7px;color:var(--text,#242438)}.ds-field{width:100%;min-height:38px;padding:8px 10px;background:var(--surface,#fff);color:var(--text,#242438);border:1px solid var(--border,#dddfe8);border-radius:var(--radius,8px);font:13px 'Segoe UI',sans-serif;caret-color:var(--accent,#5d4dba)}.ds-field:focus{border-color:var(--accent,#5d4dba)}.ds-field:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-field:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-field{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Bouton icône",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "Commande compacte avec libellé accessible.",
+      "html": "<button class=\"ds-icon\" aria-label=\"Ouvrir le dossier\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z\"/></svg></button>",
+      "css": ".ds-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:6px;border:0;border-radius:6px;color:var(--muted,#646477);background:transparent;cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out}.ds-icon:hover:not(:disabled){color:var(--text,#242438);background:var(--hover,#e9eaf2)}.ds-icon:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-icon:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-icon{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Navigation réglages",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Section courante et sections accessibles.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Réglages\"><button class=\"ds-nav-button ds-chosen\" aria-current=\"page\">Dossier et démarrage</button><button class=\"ds-nav-button\">Voix et moteur</button></nav>",
+      "css": ".ds-nav{display:grid;gap:3px}.ds-nav-button{border:0;background:transparent;text-align:left;display:flex;align-items:center;gap:9px;padding:11px 12px;border-radius:7px;font:12px 'Segoe UI',sans-serif;color:var(--muted,#646477);cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out}.ds-nav-button:hover{background:var(--hover,#e9eaf2)}.ds-nav-button.ds-chosen{background:var(--accent-soft,#efebff);color:var(--accent,#5d4dba);font-weight:600}.ds-nav-button:focus-visible{outline:2px solid var(--accent,#5d4dba);outline-offset:3px}.ds-nav-button:disabled{opacity:.48;cursor:default}@media(prefers-reduced-motion:reduce){.ds-nav-button{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Message d’état",
+      "kind": "custom",
+      "refersTo": "notice",
+      "description": "Retour après une action.",
+      "html": "<div class=\"ds-notice\" role=\"status\">Réglages enregistrés.</div>",
+      "css": ".ds-notice{padding:10px 12px;background:var(--accent-soft,#efebff);border-radius:var(--radius,8px);color:var(--text,#242438);font:14px/1.5 'Segoe UI',sans-serif}"
+    }
+  ],
+  "narrative": {
+    "northStar": "L’atelier de notes",
+    "overview": "La page, la voix et l’image disposent de surfaces stables, reliées par le dossier choisi. La couleur sert à repérer une action, une sélection ou un état pendant le travail. Cette base documente l’application Windows réalisée ; la prochaine intégration des 36 matières est confiée séparément à l’agent Couleurs & matières.\n\nLes surfaces claires froides, la typographie Segoe UI et les contours discrets donnent la priorité aux contenus. Les huit thèmes partagent la même structure. La lecture des notes garde davantage d’espace que les réglages et les commandes.",
+    "keyCharacteristics": [
+      "Surfaces fonctionnelles stables pour écrire, parler et retoucher.",
+      "Typographie Windows et document central lisible.",
+      "Accent pour agir et état du microphone toujours explicite.",
+      "Couleurs partagées entre les fenêtres et sauvegarde visible."
+    ],
+    "rules": [
+      {
+        "name": "Useful Accent",
+        "body": "L’accent distingue les actions principales, la sélection courante, les liens, le caret et le focus. Les fonds de lecture utilisent les surfaces du thème.",
+        "section": "colors"
+      },
+      {
+        "name": "Readable Page",
+        "body": "Le texte de note garde sa typographie de lecture ; les petites métadonnées ne définissent pas la taille du contenu.",
+        "section": "typography"
+      },
+      {
+        "name": "Stable Planes",
+        "body": "Les régions permanentes sont séparées par leurs tons et leurs contours. Les ombres correspondent aux éléments réellement superposés.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do utiliser les variables du thème pour les commandes et leurs états.",
+      "Do conserver la confirmation de sauvegarde visible dans la largeur compacte.",
+      "Do garder le bouton Arrêter lisible dans chaque thème.",
+      "Do respecter la réduction des mouvements demandée par Windows."
+    ],
+    "donts": [
+      "Don't remplacer les composants fonctionnels par les simulations de la galerie de palettes.",
+      "Don't faire passer la bibliothèque compacte au-dessus du texte.",
+      "Don't recolorer le contenu ou les annotations d’une capture lors d’un changement de thème.",
+      "Don't présenter les adaptations de largeur Windows comme une interface mobile validée."
+    ]
+  }
+}

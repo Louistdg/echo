@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "translation-selector",
+  "description": "Sélection locale explicite d’une zone à traduire",
+  "windows": [
+    "translation-select"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

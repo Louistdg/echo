@@ -1,0 +1,32 @@
+{
+  "delivered_utc": "2026-10-23T19:29:53.533122+00:00",
+  "version": "3.0.1",
+  "artifacts": [
+    {
+      "path": "D:\\Écho V3\\Écho V3.exe",
+      "bytes": 25893376,
+      "sha256": "3179dbb0d4701fd940dc847cc95a441d6f77ce1e8c32ae7c5c9a88b42138dce7"
+    },
+    {
+      "path": "D:\\Écho V3\\installateur\\Écho V3_3.0.1_x64-setup.exe",
+      "bytes": 812176154,
+      "sha256": "ed00a65a71667e42173d61bd9646a9e0d4cfb8ff328f2bb6f726503e68e8c0b2"
+    }
+  ],
+  "preferences_preserved": true,
+  "notes_directory_untouched": true,
+  "backup": "D:\\Écho V3\\docs\\reprise-20261022-200722",
+  "fresh_backup": "D:\\Écho V3\\docs\\avant-installation-3.0.1-20261023",
+  "live_preview_evidence": "D:\\Écho V3\\docs\\correctif-direct\\LIVE-PREVIEW.json",
+  "real_cursor_evidence": "D:\\Écho V3\\docs\\correctif-direct\\REAL-CURSOR.json",
+  "recovery_evidence": "D:\\Écho V3\\docs\\correctif-direct\\RECOVERY.json",
+  "verification_limits": [
+    "Raccourci : configuration et inscription native vérifiées ; appui clavier physique non rejoué dans cette session."
+  ],
+  "performance_patch": "D:\\Écho V3\\docs\\performance-20261023\\PERFORMANCE-INSTALLEE.json",
+  "worker_sha256": "23db2087390394e2ac833cc8554a7f6b91293670414c3176b2f0ed135f7db908",
+  "user_confirmed_external_cursor": true,
+  "resize_patch": "D:\\Écho V3\\docs\\correctif-direct\\REDIMENSIONNEMENT-INSTALLE.json",
+  "module_layout_patch": "D:\\Écho V3\\docs\\correctif-direct\\MODULES-INSTALLES.json",
+  "micro_priority_patch": "D:\\Écho V3\\docs\\performance-20261023\\latence-detaillee\\INSTALLATION.json"
+}

@@ -1,0 +1,1082 @@
+[
+  {
+    "id": "voie-lactee",
+    "name": "Voie lactée",
+    "family": "galaxies",
+    "description": "Une nuit indigo ponctuée de poussières argentées et d’un halo améthyste très diffus.",
+    "mood": "Contemplatif, précis",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#171B35",
+      "deep": "#0C1022",
+      "surface": "#252B46",
+      "text": "#F4F1EA",
+      "muted": "#B4B7CA",
+      "accent": "#E3BF82",
+      "accentText": "#282132",
+      "line": "#414867",
+      "glow": "#9D93D2"
+    },
+    "swatches": [
+      "#0C1022",
+      "#171B35",
+      "#9D93D2",
+      "#E3BF82",
+      "#F4F1EA"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 20% 16%, rgba(157, 147, 210, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(227, 191, 130, 0.1) 0%, transparent 52%), linear-gradient(0deg, #0C1022 0%, #171B35 57%, #252B46 100%)",
+    "recommended": true
+  },
+  {
+    "id": "andromede",
+    "name": "Andromède",
+    "family": "galaxies",
+    "description": "Un ciel prune traversé de voiles bleu pétrole, avec une lueur rose minérale.",
+    "mood": "Mystérieux, enveloppant",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#291C33",
+      "deep": "#170F21",
+      "surface": "#3A2B44",
+      "text": "#F8EFEF",
+      "muted": "#C5B1C9",
+      "accent": "#89D4C8",
+      "accentText": "#142D2C",
+      "line": "#59415D",
+      "glow": "#CA91AC"
+    },
+    "swatches": [
+      "#170F21",
+      "#291C33",
+      "#CA91AC",
+      "#89D4C8",
+      "#F8EFEF"
+    ],
+    "textureOpacity": 0.5,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 47% 16%, rgba(202, 145, 172, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(137, 212, 200, 0.1) 0%, transparent 52%), linear-gradient(0deg, #170F21 0%, #291C33 57%, #3A2B44 100%)",
+    "recommended": false
+  },
+  {
+    "id": "nebuleuse-cuivre",
+    "name": "Nébuleuse de cuivre",
+    "family": "galaxies",
+    "description": "Des nuages roux suspendus dans une encre violette, relevés de cuivre doux.",
+    "mood": "Chaud, cosmique",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#2A202C",
+      "deep": "#17121E",
+      "surface": "#3C2D3D",
+      "text": "#FAEFE5",
+      "muted": "#CAB3BE",
+      "accent": "#DDA578",
+      "accentText": "#342018",
+      "line": "#5F4754",
+      "glow": "#AF6B51"
+    },
+    "swatches": [
+      "#17121E",
+      "#2A202C",
+      "#AF6B51",
+      "#DDA578",
+      "#FAEFE5"
+    ],
+    "textureOpacity": 0.54,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 74% 16%, rgba(175, 107, 81, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(221, 165, 120, 0.1) 0%, transparent 52%), linear-gradient(0deg, #17121E 0%, #2A202C 57%, #3C2D3D 100%)",
+    "recommended": true
+  },
+  {
+    "id": "nuit-boreale",
+    "name": "Nuit boréale",
+    "family": "galaxies",
+    "description": "Une nuit de sapin et de bleu froid où un souffle vert traverse les étoiles.",
+    "mood": "Vivant, silencieux",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#102E2F",
+      "deep": "#0A191F",
+      "surface": "#1C4040",
+      "text": "#ECF6EA",
+      "muted": "#B0CBC1",
+      "accent": "#B4D88B",
+      "accentText": "#1A2C20",
+      "line": "#3B6159",
+      "glow": "#639D9A"
+    },
+    "swatches": [
+      "#0A191F",
+      "#102E2F",
+      "#639D9A",
+      "#B4D88B",
+      "#ECF6EA"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 20% 16%, rgba(99, 157, 154, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(180, 216, 139, 0.1) 0%, transparent 52%), linear-gradient(0deg, #0A191F 0%, #102E2F 57%, #1C4040 100%)",
+    "recommended": false
+  },
+  {
+    "id": "horizon-io",
+    "name": "Horizon d’Io",
+    "family": "galaxies",
+    "description": "Un horizon safrané émerge d’un ciel aubergine, comme une planète éclairée de biais.",
+    "mood": "Sculptural, incandescent",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#302036",
+      "deep": "#1B1123",
+      "surface": "#432D49",
+      "text": "#FFF0E1",
+      "muted": "#D1B6C8",
+      "accent": "#F1AE62",
+      "accentText": "#3C2415",
+      "line": "#68465E",
+      "glow": "#A96043"
+    },
+    "swatches": [
+      "#1B1123",
+      "#302036",
+      "#A96043",
+      "#F1AE62",
+      "#FFF0E1"
+    ],
+    "textureOpacity": 0.5,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 47% 16%, rgba(169, 96, 67, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(241, 174, 98, 0.1) 0%, transparent 52%), linear-gradient(0deg, #1B1123 0%, #302036 57%, #432D49 100%)",
+    "recommended": false
+  },
+  {
+    "id": "ciel-orage",
+    "name": "Ciel d’orage",
+    "family": "galaxies",
+    "description": "Des brumes bleu ardoise dessinent un ciel de nuit, avec un éclair lavande assourdi.",
+    "mood": "Calme, électrique",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#202C3E",
+      "deep": "#111B2A",
+      "surface": "#2D3E54",
+      "text": "#F0F4F7",
+      "muted": "#B5C6D5",
+      "accent": "#C6B6EB",
+      "accentText": "#2A2440",
+      "line": "#4A6076",
+      "glow": "#7D98B1"
+    },
+    "swatches": [
+      "#111B2A",
+      "#202C3E",
+      "#7D98B1",
+      "#C6B6EB",
+      "#F0F4F7"
+    ],
+    "textureOpacity": 0.54,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 74% 16%, rgba(125, 152, 177, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(198, 182, 235, 0.1) 0%, transparent 52%), linear-gradient(0deg, #111B2A 0%, #202C3E 57%, #2D3E54 100%)",
+    "recommended": false
+  },
+  {
+    "id": "orbite-rose",
+    "name": "Orbite rose",
+    "family": "galaxies",
+    "description": "Une galaxie mûre et grenat, animée de poussières rosées sans effet néon.",
+    "mood": "Intime, vibrant",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#341B2D",
+      "deep": "#200F1D",
+      "surface": "#48273C",
+      "text": "#FFF0F2",
+      "muted": "#D6B4C6",
+      "accent": "#E7A4BD",
+      "accentText": "#402033",
+      "line": "#6B4058",
+      "glow": "#AD6F9C"
+    },
+    "swatches": [
+      "#200F1D",
+      "#341B2D",
+      "#AD6F9C",
+      "#E7A4BD",
+      "#FFF0F2"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 20% 16%, rgba(173, 111, 156, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(231, 164, 189, 0.1) 0%, transparent 52%), linear-gradient(0deg, #200F1D 0%, #341B2D 57%, #48273C 100%)",
+    "recommended": false
+  },
+  {
+    "id": "poussiere-solaire",
+    "name": "Poussière solaire",
+    "family": "galaxies",
+    "description": "Un ciel graphite chaud accueille des traînées d’or pâle et des grains d’ambre.",
+    "mood": "Précieux, mat",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#2C2923",
+      "deep": "#191815",
+      "surface": "#403A30",
+      "text": "#FAF3E3",
+      "muted": "#CCC1AB",
+      "accent": "#E6C16C",
+      "accentText": "#32270E",
+      "line": "#645849",
+      "glow": "#AD8A4F"
+    },
+    "swatches": [
+      "#191815",
+      "#2C2923",
+      "#AD8A4F",
+      "#E6C16C",
+      "#FAF3E3"
+    ],
+    "textureOpacity": 0.5,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 47% 16%, rgba(173, 138, 79, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(230, 193, 108, 0.1) 0%, transparent 52%), linear-gradient(0deg, #191815 0%, #2C2923 57%, #403A30 100%)",
+    "recommended": false
+  },
+  {
+    "id": "eclipse-marine",
+    "name": "Éclipse marine",
+    "family": "galaxies",
+    "description": "Une profondeur marine se colore de cyan grisé autour d’un disque d’ombre.",
+    "mood": "Immersif, net",
+    "texture": "galaxy",
+    "colors": {
+      "base": "#10283B",
+      "deep": "#091724",
+      "surface": "#1D3B50",
+      "text": "#EBF5F5",
+      "muted": "#AFC6CE",
+      "accent": "#86D0D0",
+      "accentText": "#103237",
+      "line": "#365C6F",
+      "glow": "#5B9BAF"
+    },
+    "swatches": [
+      "#091724",
+      "#10283B",
+      "#5B9BAF",
+      "#86D0D0",
+      "#EBF5F5"
+    ],
+    "textureOpacity": 0.54,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 74% 16%, rgba(91, 155, 175, 0.31) 0%, transparent 58%), radial-gradient(ellipse at 80% 84%, rgba(134, 208, 208, 0.1) 0%, transparent 52%), linear-gradient(0deg, #091724 0%, #10283B 57%, #1D3B50 100%)",
+    "recommended": false
+  },
+  {
+    "id": "ocre-sienne",
+    "name": "Ocre de Sienne",
+    "family": "pigments",
+    "description": "Des grains de terre rouge s’accumulent sur un papier écru et laissent respirer la matière.",
+    "mood": "Artisanal, lumineux",
+    "texture": "pigment",
+    "colors": {
+      "base": "#E8D8BC",
+      "deep": "#D4B893",
+      "surface": "#F5EBD7",
+      "text": "#3F2D21",
+      "muted": "#74604B",
+      "accent": "#9A4A2E",
+      "accentText": "#FFF4E2",
+      "line": "#C5AB89",
+      "glow": "#C78454"
+    },
+    "swatches": [
+      "#D4B893",
+      "#E8D8BC",
+      "#C78454",
+      "#9A4A2E",
+      "#3F2D21"
+    ],
+    "textureOpacity": 0.28,
+    "textureBlend": "multiply",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(199, 132, 84, 0.28) 0%, transparent 66%), linear-gradient(4deg, #D4B893 0%, #E8D8BC 43%, #F5EBD7 100%)",
+    "recommended": false
+  },
+  {
+    "id": "bleu-prusse",
+    "name": "Bleu de Prusse",
+    "family": "pigments",
+    "description": "Un pigment bleu dense, presque velouté, accompagné d’une touche jaune patinée.",
+    "mood": "Profond, affirmé",
+    "texture": "pigment",
+    "colors": {
+      "base": "#102E41",
+      "deep": "#0A1C2B",
+      "surface": "#1A4053",
+      "text": "#EDF2E8",
+      "muted": "#ADC7CA",
+      "accent": "#E5C16E",
+      "accentText": "#302913",
+      "line": "#3F6271",
+      "glow": "#568BA3"
+    },
+    "swatches": [
+      "#0A1C2B",
+      "#102E41",
+      "#568BA3",
+      "#E5C16E",
+      "#EDF2E8"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(86, 139, 163, 0.28) 0%, transparent 66%), linear-gradient(4deg, #0A1C2B 0%, #102E41 43%, #1A4053 100%)",
+    "recommended": true
+  },
+  {
+    "id": "terre-volcanique",
+    "name": "Terre volcanique",
+    "family": "pigments",
+    "description": "Une terracotta brûlée se mêle à la poussière de lave et à un accent crème.",
+    "mood": "Chaleureux, terrien",
+    "texture": "pigment",
+    "colors": {
+      "base": "#713F33",
+      "deep": "#4D2B27",
+      "surface": "#8A5141",
+      "text": "#FFF0DC",
+      "muted": "#EDD8C6",
+      "accent": "#EBD59C",
+      "accentText": "#49331E",
+      "line": "#AE7963",
+      "glow": "#BB7750"
+    },
+    "swatches": [
+      "#4D2B27",
+      "#713F33",
+      "#BB7750",
+      "#EBD59C",
+      "#FFF0DC"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(187, 119, 80, 0.28) 0%, transparent 66%), linear-gradient(4deg, #4D2B27 0%, #713F33 43%, #8A5141 100%)",
+    "recommended": false
+  },
+  {
+    "id": "malachite",
+    "name": "Malachite",
+    "family": "pigments",
+    "description": "Des verts minéraux profonds, une trame poudrée et un filet de laiton vieilli.",
+    "mood": "Botanique, dense",
+    "texture": "pigment",
+    "colors": {
+      "base": "#183B31",
+      "deep": "#10271F",
+      "surface": "#245143",
+      "text": "#EDF5E3",
+      "muted": "#BAD1BD",
+      "accent": "#D1BD7B",
+      "accentText": "#2D2D16",
+      "line": "#497461",
+      "glow": "#6D9B76"
+    },
+    "swatches": [
+      "#10271F",
+      "#183B31",
+      "#6D9B76",
+      "#D1BD7B",
+      "#EDF5E3"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(109, 155, 118, 0.28) 0%, transparent 66%), linear-gradient(4deg, #10271F 0%, #183B31 43%, #245143 100%)",
+    "recommended": false
+  },
+  {
+    "id": "garance",
+    "name": "Garance",
+    "family": "pigments",
+    "description": "Un rouge de teinture mêlé de lie-de-vin, avec une pointe de rose argile.",
+    "mood": "Sensuel, feutré",
+    "texture": "pigment",
+    "colors": {
+      "base": "#542433",
+      "deep": "#341722",
+      "surface": "#713447",
+      "text": "#FFF0E5",
+      "muted": "#E0BBC4",
+      "accent": "#E5AB96",
+      "accentText": "#462923",
+      "line": "#985A6B",
+      "glow": "#B96B78"
+    },
+    "swatches": [
+      "#341722",
+      "#542433",
+      "#B96B78",
+      "#E5AB96",
+      "#FFF0E5"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(185, 107, 120, 0.28) 0%, transparent 66%), linear-gradient(4deg, #341722 0%, #542433 43%, #713447 100%)",
+    "recommended": true
+  },
+  {
+    "id": "safran-noir",
+    "name": "Safran noir",
+    "family": "pigments",
+    "description": "Des pigments safran déposés sur un brun d’encre donnent une chaleur d’atelier.",
+    "mood": "Solaire, nocturne",
+    "texture": "pigment",
+    "colors": {
+      "base": "#352D1E",
+      "deep": "#211D15",
+      "surface": "#4B3D27",
+      "text": "#FAF1D8",
+      "muted": "#D2C19A",
+      "accent": "#E5BB4D",
+      "accentText": "#392B0B",
+      "line": "#75603A",
+      "glow": "#B3924A"
+    },
+    "swatches": [
+      "#211D15",
+      "#352D1E",
+      "#B3924A",
+      "#E5BB4D",
+      "#FAF1D8"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(179, 146, 74, 0.28) 0%, transparent 66%), linear-gradient(4deg, #211D15 0%, #352D1E 43%, #4B3D27 100%)",
+    "recommended": false
+  },
+  {
+    "id": "indigo-japonais",
+    "name": "Indigo japonais",
+    "family": "pigments",
+    "description": "Un papier bleuté reçoit une encre indigo et quelques irrégularités de bain de teinture.",
+    "mood": "Sobre, tactile",
+    "texture": "pigment",
+    "colors": {
+      "base": "#DDE4E4",
+      "deep": "#B8C9CE",
+      "surface": "#EEF2ED",
+      "text": "#213E55",
+      "muted": "#5A6B74",
+      "accent": "#34566C",
+      "accentText": "#F4F6EC",
+      "line": "#B2C2C7",
+      "glow": "#809DA7"
+    },
+    "swatches": [
+      "#B8C9CE",
+      "#DDE4E4",
+      "#809DA7",
+      "#34566C",
+      "#213E55"
+    ],
+    "textureOpacity": 0.28,
+    "textureBlend": "multiply",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(128, 157, 167, 0.28) 0%, transparent 66%), linear-gradient(4deg, #B8C9CE 0%, #DDE4E4 43%, #EEF2ED 100%)",
+    "recommended": false
+  },
+  {
+    "id": "vert-vessie",
+    "name": "Vert de vessie",
+    "family": "pigments",
+    "description": "Un vert olive terreux, finement granulé, est réveillé par une touche de citron mûr.",
+    "mood": "Organique, tranquille",
+    "texture": "pigment",
+    "colors": {
+      "base": "#35402A",
+      "deep": "#212A1C",
+      "surface": "#485538",
+      "text": "#F4F2DC",
+      "muted": "#C7CBAE",
+      "accent": "#CED48C",
+      "accentText": "#2D351C",
+      "line": "#6F7B53",
+      "glow": "#9AA565"
+    },
+    "swatches": [
+      "#212A1C",
+      "#35402A",
+      "#9AA565",
+      "#CED48C",
+      "#F4F2DC"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(154, 165, 101, 0.28) 0%, transparent 66%), linear-gradient(4deg, #212A1C 0%, #35402A 43%, #485538 100%)",
+    "recommended": false
+  },
+  {
+    "id": "cobalt-vif",
+    "name": "Cobalt vif",
+    "family": "pigments",
+    "description": "Un bleu de céramiste saturé garde une surface mate et des éclats de craie.",
+    "mood": "Graphique, franc",
+    "texture": "pigment",
+    "colors": {
+      "base": "#203B70",
+      "deep": "#15284E",
+      "surface": "#2D4D87",
+      "text": "#F1F4EC",
+      "muted": "#C3D1E0",
+      "accent": "#D2DBAC",
+      "accentText": "#243C44",
+      "line": "#5474A1",
+      "glow": "#7E9ECC"
+    },
+    "swatches": [
+      "#15284E",
+      "#203B70",
+      "#7E9ECC",
+      "#D2DBAC",
+      "#F1F4EC"
+    ],
+    "textureOpacity": 0.36,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 0% 100%, rgba(126, 158, 204, 0.28) 0%, transparent 66%), linear-gradient(4deg, #15284E 0%, #203B70 43%, #2D4D87 100%)",
+    "recommended": false
+  },
+  {
+    "id": "basalte",
+    "name": "Basalte",
+    "family": "reliefs",
+    "description": "Des strates anthracite et des arêtes douces accrochent une lumière soufre très retenue.",
+    "mood": "Architectural, solide",
+    "texture": "relief",
+    "colors": {
+      "base": "#252B29",
+      "deep": "#171D1B",
+      "surface": "#363E39",
+      "text": "#EFF2E7",
+      "muted": "#BEC8BC",
+      "accent": "#CFD29A",
+      "accentText": "#2D3320",
+      "line": "#59685A",
+      "glow": "#829078"
+    },
+    "swatches": [
+      "#171D1B",
+      "#252B29",
+      "#829078",
+      "#CFD29A",
+      "#EFF2E7"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(130, 144, 120, 0.2) 0%, transparent 60%), linear-gradient(8deg, #171D1B 0%, #252B29 38%, #363E39 100%)",
+    "recommended": false
+  },
+  {
+    "id": "dune-sculptee",
+    "name": "Dune sculptée",
+    "family": "reliefs",
+    "description": "Des courbes de sable en léger relief s’organisent autour d’une encre brun profond.",
+    "mood": "Apaisé, sculptural",
+    "texture": "relief",
+    "colors": {
+      "base": "#E8D9BD",
+      "deep": "#D3BC96",
+      "surface": "#F6EBD4",
+      "text": "#3E3425",
+      "muted": "#74654B",
+      "accent": "#975D39",
+      "accentText": "#FFF6E3",
+      "line": "#C9B38F",
+      "glow": "#BC9260"
+    },
+    "swatches": [
+      "#D3BC96",
+      "#E8D9BD",
+      "#BC9260",
+      "#975D39",
+      "#3E3425"
+    ],
+    "textureOpacity": 0.38,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(188, 146, 96, 0.2) 0%, transparent 60%), linear-gradient(8deg, #D3BC96 0%, #E8D9BD 38%, #F6EBD4 100%)",
+    "recommended": true
+  },
+  {
+    "id": "schiste-bleu",
+    "name": "Schiste bleu",
+    "family": "reliefs",
+    "description": "Une roche bleue se feuillette en couches fines, traversées de joints gris argent.",
+    "mood": "Frais, structuré",
+    "texture": "relief",
+    "colors": {
+      "base": "#293C45",
+      "deep": "#19272D",
+      "surface": "#3A525B",
+      "text": "#EDF3ED",
+      "muted": "#C1D0CC",
+      "accent": "#B9D4CB",
+      "accentText": "#263C38",
+      "line": "#5C7880",
+      "glow": "#809CA0"
+    },
+    "swatches": [
+      "#19272D",
+      "#293C45",
+      "#809CA0",
+      "#B9D4CB",
+      "#EDF3ED"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(128, 156, 160, 0.2) 0%, transparent 60%), linear-gradient(8deg, #19272D 0%, #293C45 38%, #3A525B 100%)",
+    "recommended": false
+  },
+  {
+    "id": "canyon-rouge",
+    "name": "Canyon rouge",
+    "family": "reliefs",
+    "description": "Une roche rosée éclairée de haut révèle des creux ocre et un accent brique.",
+    "mood": "Chaud, monumental",
+    "texture": "relief",
+    "colors": {
+      "base": "#E4C2AE",
+      "deep": "#CCA08D",
+      "surface": "#F3DED0",
+      "text": "#51372F",
+      "muted": "#7C5C51",
+      "accent": "#A14E36",
+      "accentText": "#FFF3E7",
+      "line": "#BD9783",
+      "glow": "#BE8068"
+    },
+    "swatches": [
+      "#CCA08D",
+      "#E4C2AE",
+      "#BE8068",
+      "#A14E36",
+      "#51372F"
+    ],
+    "textureOpacity": 0.38,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(190, 128, 104, 0.2) 0%, transparent 60%), linear-gradient(8deg, #CCA08D 0%, #E4C2AE 38%, #F3DED0 100%)",
+    "recommended": false
+  },
+  {
+    "id": "ardoise-cuivree",
+    "name": "Ardoise cuivrée",
+    "family": "reliefs",
+    "description": "Une ardoise bleu noir présente de fines arêtes chaudes et des veines de cuivre.",
+    "mood": "Urbain, chaleureux",
+    "texture": "relief",
+    "colors": {
+      "base": "#24303A",
+      "deep": "#151F28",
+      "surface": "#344550",
+      "text": "#EFF2EF",
+      "muted": "#BECDD0",
+      "accent": "#DDA984",
+      "accentText": "#34261F",
+      "line": "#566B72",
+      "glow": "#936D59"
+    },
+    "swatches": [
+      "#151F28",
+      "#24303A",
+      "#936D59",
+      "#DDA984",
+      "#EFF2EF"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(147, 109, 89, 0.2) 0%, transparent 60%), linear-gradient(8deg, #151F28 0%, #24303A 38%, #344550 100%)",
+    "recommended": false
+  },
+  {
+    "id": "craie-marine",
+    "name": "Craie marine",
+    "family": "reliefs",
+    "description": "Des couches de craie blanche laissent affleurer un vert d’eau sous une lumière rasante.",
+    "mood": "Clair, respirant",
+    "texture": "relief",
+    "colors": {
+      "base": "#E3E9DD",
+      "deep": "#BECDBE",
+      "surface": "#F4F5E9",
+      "text": "#294D48",
+      "muted": "#5E7569",
+      "accent": "#386C66",
+      "accentText": "#F4F7EB",
+      "line": "#B4C8B9",
+      "glow": "#85ADA1"
+    },
+    "swatches": [
+      "#BECDBE",
+      "#E3E9DD",
+      "#85ADA1",
+      "#386C66",
+      "#294D48"
+    ],
+    "textureOpacity": 0.38,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(133, 173, 161, 0.2) 0%, transparent 60%), linear-gradient(8deg, #BECDBE 0%, #E3E9DD 38%, #F4F5E9 100%)",
+    "recommended": false
+  },
+  {
+    "id": "lave-refroidie",
+    "name": "Lave refroidie",
+    "family": "reliefs",
+    "description": "Une lave charbon garde un liseré rouge brique au fond de ses sillons.",
+    "mood": "Dense, énergique",
+    "texture": "relief",
+    "colors": {
+      "base": "#302729",
+      "deep": "#1D191C",
+      "surface": "#46363A",
+      "text": "#FAEFEB",
+      "muted": "#D1BCBB",
+      "accent": "#E7A28B",
+      "accentText": "#432520",
+      "line": "#6E5053",
+      "glow": "#A65D4E"
+    },
+    "swatches": [
+      "#1D191C",
+      "#302729",
+      "#A65D4E",
+      "#E7A28B",
+      "#FAEFEB"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(166, 93, 78, 0.2) 0%, transparent 60%), linear-gradient(8deg, #1D191C 0%, #302729 38%, #46363A 100%)",
+    "recommended": false
+  },
+  {
+    "id": "sillon-forestier",
+    "name": "Sillon forestier",
+    "family": "reliefs",
+    "description": "Un bois sombre et des couches de mousse dessinent des vallons verts et bruns.",
+    "mood": "Naturel, enraciné",
+    "texture": "relief",
+    "colors": {
+      "base": "#283C32",
+      "deep": "#18271F",
+      "surface": "#3B5343",
+      "text": "#EFF1DD",
+      "muted": "#C5CFB6",
+      "accent": "#D0B986",
+      "accentText": "#34331E",
+      "line": "#627B5D",
+      "glow": "#8D9361"
+    },
+    "swatches": [
+      "#18271F",
+      "#283C32",
+      "#8D9361",
+      "#D0B986",
+      "#EFF1DD"
+    ],
+    "textureOpacity": 0.46,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(141, 147, 97, 0.2) 0%, transparent 60%), linear-gradient(8deg, #18271F 0%, #283C32 38%, #3B5343 100%)",
+    "recommended": false
+  },
+  {
+    "id": "roche-lunaire",
+    "name": "Roche lunaire",
+    "family": "reliefs",
+    "description": "Un calcaire gris froid se creuse de formes souples, avec des reflets lilas discrets.",
+    "mood": "Minéral, aérien",
+    "texture": "relief",
+    "colors": {
+      "base": "#DDE1E2",
+      "deep": "#BEC5CE",
+      "surface": "#F0F0ED",
+      "text": "#3B4252",
+      "muted": "#686D7C",
+      "accent": "#6A6187",
+      "accentText": "#F8F4ED",
+      "line": "#B8BEC7",
+      "glow": "#9A9CB9"
+    },
+    "swatches": [
+      "#BEC5CE",
+      "#DDE1E2",
+      "#9A9CB9",
+      "#6A6187",
+      "#3B4252"
+    ],
+    "textureOpacity": 0.38,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 100% 0%, rgba(154, 156, 185, 0.2) 0%, transparent 60%), linear-gradient(8deg, #BEC5CE 0%, #DDE1E2 38%, #F0F0ED 100%)",
+    "recommended": false
+  },
+  {
+    "id": "perle-ormeau",
+    "name": "Perle d’ormeau",
+    "family": "nacres",
+    "description": "Une nacre sombre fait varier prune, vert d’eau et cuivre selon les courbes du panneau.",
+    "mood": "Irisé, profond",
+    "texture": "nacre",
+    "colors": {
+      "base": "#302932",
+      "deep": "#1D1B27",
+      "surface": "#453D48",
+      "text": "#F4F1E8",
+      "muted": "#CEC0D0",
+      "accent": "#9BC9BD",
+      "accentText": "#283D39",
+      "line": "#6B5E6C",
+      "glow": "#A78B9C"
+    },
+    "swatches": [
+      "#1D1B27",
+      "#302932",
+      "#A78B9C",
+      "#9BC9BD",
+      "#F4F1E8"
+    ],
+    "textureOpacity": 0.45,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(167, 139, 156, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(155, 201, 189, 0.14) 0%, transparent 58%), linear-gradient(2deg, #1D1B27 0%, #302932 42%, #453D48 100%)",
+    "recommended": true
+  },
+  {
+    "id": "opale-nuit",
+    "name": "Opale de nuit",
+    "family": "nacres",
+    "description": "Un bleu noir opalin porte des reflets menthe et de fins éclats bleutés.",
+    "mood": "Précieux, calme",
+    "texture": "nacre",
+    "colors": {
+      "base": "#1D2F38",
+      "deep": "#101D28",
+      "surface": "#30434B",
+      "text": "#EFF3EC",
+      "muted": "#BFCCD0",
+      "accent": "#B8D7C8",
+      "accentText": "#283F37",
+      "line": "#526974",
+      "glow": "#769BA6"
+    },
+    "swatches": [
+      "#101D28",
+      "#1D2F38",
+      "#769BA6",
+      "#B8D7C8",
+      "#EFF3EC"
+    ],
+    "textureOpacity": 0.45,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(118, 155, 166, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(184, 215, 200, 0.14) 0%, transparent 58%), linear-gradient(2deg, #101D28 0%, #1D2F38 42%, #30434B 100%)",
+    "recommended": false
+  },
+  {
+    "id": "soie-champagne",
+    "name": "Soie champagne",
+    "family": "nacres",
+    "description": "Une surface ivoire se plisse doucement et fait apparaître une brillance champagne retenue.",
+    "mood": "Doux, sophistiqué",
+    "texture": "nacre",
+    "colors": {
+      "base": "#E9DECB",
+      "deep": "#D3C1A1",
+      "surface": "#F6EFDF",
+      "text": "#463B2C",
+      "muted": "#786A54",
+      "accent": "#89673D",
+      "accentText": "#FFF4DD",
+      "line": "#C9B797",
+      "glow": "#C2A66D"
+    },
+    "swatches": [
+      "#D3C1A1",
+      "#E9DECB",
+      "#C2A66D",
+      "#89673D",
+      "#463B2C"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(194, 166, 109, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(137, 103, 61, 0.14) 0%, transparent 58%), linear-gradient(2deg, #D3C1A1 0%, #E9DECB 42%, #F6EFDF 100%)",
+    "recommended": false
+  },
+  {
+    "id": "brume-jade",
+    "name": "Brume de jade",
+    "family": "nacres",
+    "description": "Un voile vert grisé et une perle crème éclairent une encre de jade intense.",
+    "mood": "Végétal, délicat",
+    "texture": "nacre",
+    "colors": {
+      "base": "#DCE7DE",
+      "deep": "#B6CBC1",
+      "surface": "#F0F3E7",
+      "text": "#2B4D42",
+      "muted": "#5B7365",
+      "accent": "#396C59",
+      "accentText": "#F4F5E4",
+      "line": "#ABC5B5",
+      "glow": "#83AB9A"
+    },
+    "swatches": [
+      "#B6CBC1",
+      "#DCE7DE",
+      "#83AB9A",
+      "#396C59",
+      "#2B4D42"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(131, 171, 154, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(57, 108, 89, 0.14) 0%, transparent 58%), linear-gradient(2deg, #B6CBC1 0%, #DCE7DE 42%, #F0F3E7 100%)",
+    "recommended": false
+  },
+  {
+    "id": "quartz-fume",
+    "name": "Quartz fumé",
+    "family": "nacres",
+    "description": "Un gris taupe nacré absorbe des reflets mauves, comme un quartz poli à la main.",
+    "mood": "Tamisé, enveloppant",
+    "texture": "nacre",
+    "colors": {
+      "base": "#DBD4CE",
+      "deep": "#BFB2AB",
+      "surface": "#EEE9E2",
+      "text": "#4B3F47",
+      "muted": "#73656D",
+      "accent": "#756079",
+      "accentText": "#FFF6ED",
+      "line": "#B7A7AF",
+      "glow": "#AA90A7"
+    },
+    "swatches": [
+      "#BFB2AB",
+      "#DBD4CE",
+      "#AA90A7",
+      "#756079",
+      "#4B3F47"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(170, 144, 167, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(117, 96, 121, 0.14) 0%, transparent 58%), linear-gradient(2deg, #BFB2AB 0%, #DBD4CE 42%, #EEE9E2 100%)",
+    "recommended": false
+  },
+  {
+    "id": "perle-peche",
+    "name": "Perle de pêche",
+    "family": "nacres",
+    "description": "Une nacre pêche assourdie reçoit des lueurs rosées et une ponctuation rouge terre.",
+    "mood": "Chaleureux, sensible",
+    "texture": "nacre",
+    "colors": {
+      "base": "#EBD6C7",
+      "deep": "#D4B5AA",
+      "surface": "#F8EADF",
+      "text": "#563B36",
+      "muted": "#81635A",
+      "accent": "#A45445",
+      "accentText": "#FFF6EB",
+      "line": "#C5A094",
+      "glow": "#C7958A"
+    },
+    "swatches": [
+      "#D4B5AA",
+      "#EBD6C7",
+      "#C7958A",
+      "#A45445",
+      "#563B36"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(199, 149, 138, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(164, 84, 69, 0.14) 0%, transparent 58%), linear-gradient(2deg, #D4B5AA 0%, #EBD6C7 42%, #F8EADF 100%)",
+    "recommended": false
+  },
+  {
+    "id": "nacre-encre",
+    "name": "Nacre d’encre",
+    "family": "nacres",
+    "description": "Un vert noir poli laisse passer des reflets bleu argent et de petites irisations cuivre.",
+    "mood": "Intime, élégant",
+    "texture": "nacre",
+    "colors": {
+      "base": "#203330",
+      "deep": "#12221F",
+      "surface": "#334945",
+      "text": "#EDF3E7",
+      "muted": "#BECEC4",
+      "accent": "#C4CFB1",
+      "accentText": "#2D3B2C",
+      "line": "#536F65",
+      "glow": "#829D97"
+    },
+    "swatches": [
+      "#12221F",
+      "#203330",
+      "#829D97",
+      "#C4CFB1",
+      "#EDF3E7"
+    ],
+    "textureOpacity": 0.45,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(130, 157, 151, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(196, 207, 177, 0.14) 0%, transparent 58%), linear-gradient(2deg, #12221F 0%, #203330 42%, #334945 100%)",
+    "recommended": false
+  },
+  {
+    "id": "coquillage-violet",
+    "name": "Coquillage violet",
+    "family": "nacres",
+    "description": "Des stries lilas se déploient sur un blanc coquille, avec une encre violette fumée.",
+    "mood": "Poétique, lumineux",
+    "texture": "nacre",
+    "colors": {
+      "base": "#E0D9E9",
+      "deep": "#C3B7D4",
+      "surface": "#F1EBF4",
+      "text": "#4C3D5B",
+      "muted": "#74657C",
+      "accent": "#776184",
+      "accentText": "#FFF5F0",
+      "line": "#BDAFCB",
+      "glow": "#AF94C3"
+    },
+    "swatches": [
+      "#C3B7D4",
+      "#E0D9E9",
+      "#AF94C3",
+      "#776184",
+      "#4C3D5B"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(175, 148, 195, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(119, 97, 132, 0.14) 0%, transparent 58%), linear-gradient(2deg, #C3B7D4 0%, #E0D9E9 42%, #F1EBF4 100%)",
+    "recommended": false
+  },
+  {
+    "id": "lune-argentee",
+    "name": "Lune argentée",
+    "family": "nacres",
+    "description": "Une perle gris bleu accueille des reflets d’acier doux et un accent bleu nuit.",
+    "mood": "Clair, précis",
+    "texture": "nacre",
+    "colors": {
+      "base": "#DCE4E7",
+      "deep": "#BDC9D1",
+      "surface": "#EFF3F0",
+      "text": "#334957",
+      "muted": "#5F7079",
+      "accent": "#3E6175",
+      "accentText": "#F4F5EC",
+      "line": "#ADBDC7",
+      "glow": "#89A6B7"
+    },
+    "swatches": [
+      "#BDC9D1",
+      "#DCE4E7",
+      "#89A6B7",
+      "#3E6175",
+      "#334957"
+    ],
+    "textureOpacity": 0.34,
+    "textureBlend": "soft-light",
+    "background": "radial-gradient(ellipse at 8% 18%, rgba(137, 166, 183, 0.27) 0%, transparent 60%), radial-gradient(ellipse at 95% 92%, rgba(62, 97, 117, 0.14) 0%, transparent 58%), linear-gradient(2deg, #BDC9D1 0%, #DCE4E7 42%, #EFF3F0 100%)",
+    "recommended": false
+  }
+]

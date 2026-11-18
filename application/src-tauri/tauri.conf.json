@@ -1,0 +1,118 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Écho V3",
+  "version": "3.0.1",
+  "identifier": "com.echo.v3",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "Écho V3 — Notes",
+        "url": "/",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 750,
+        "minHeight": 560,
+        "visible": false
+      },
+      {
+        "label": "quick",
+        "create": false,
+        "title": "Écho V3 — Voix",
+        "url": "/quick",
+        "width": 244,
+        "height": 64,
+        "minWidth": 244,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "minHeight": 64,
+        "maxWidth": 244,
+        "maxHeight": 64,
+        "shadow": false,
+        "focusable": false
+      },
+      {
+        "label": "capture",
+        "create": false,
+        "title": "Écho V3 — Sélection",
+        "url": "/capture",
+        "width": 900,
+        "height": 600,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false
+      },
+      {
+        "label": "retouche",
+        "create": false,
+        "title": "Écho V3 — Retoucher",
+        "url": "/retouche",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 620,
+        "visible": false
+      },
+      {
+        "label": "settings",
+        "create": false,
+        "title": "Écho V3 — Réglages",
+        "url": "/settings",
+        "width": 960,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 600,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "resources": {
+      "../../moteur/": "moteur/",
+      "icons/32x32.png": "icons/32x32.png"
+    },
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "French"
+        ],
+        "displayLanguageSelector": false,
+        "compression": "zlib"
+      }
+    }
+  }
+}

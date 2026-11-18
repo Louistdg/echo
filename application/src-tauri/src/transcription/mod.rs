@@ -1,0 +1,205 @@
+// Moteur de transcription (§5 du plan).
+//
+// L'interface `TranscriptionEngine` est l'abstraction remplaçable (§2.2) :
+// aujourd'hui une implémentation `WhisperCli` qui lance whisper.cpp en
+// processus isolé (une exécution par transcription), demain un `whisper-server`
+// résident ou un moteur cloud opt-in. Le reste de l'app ne voit que le trait.
+//
+// Aucune donnée ne quitte la machine : le CLI lit un WAV local et écrit un
+// fichier texte local.
+
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+pub trait TranscriptionEngine: Send + Sync {
+    fn name(&self) -> &'static str;
+    /// Transcrit un WAV 16 kHz mono en texte. Erreur explicite en cas d'échec.
+    fn transcribe(&self, wav_path: &Path) -> Result<String, String>;
+}
+
+/// Nettoyage local, sans IA : suppression des hésitations, majuscules en début
+/// de phrase, espaces normalisés. Aucune reformulation — le sens est intact.
+/// C'est le « nettoyage local d'abord » du plan ; la reformulation par modèle
+/// reste un choix explicite, jamais appliquée ici.
+pub fn clean_text(raw: &str) -> String {
+    const FILLERS: &[&str] = &["euh", "hein", "ben", "hum", "genre", "bah"];
+
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    let mut gardees: Vec<&str> = Vec::with_capacity(words.len());
+    for w in words {
+        let noyau = w.trim_matches(|c: char| !c.is_alphanumeric());
+        if FILLERS.contains(&noyau.to_lowercase().as_str()) {
+            continue;
+        }
+        gardees.push(w);
+    }
+
+    let s = gardees.join(" ");
+    let mut chars: Vec<char> = s.chars().collect();
+    let mut majuscule = true;
+    for c in chars.iter_mut() {
+        if majuscule && c.is_alphabetic() {
+            if let Some(up) = c.to_uppercase().next() {
+                *c = up;
+            }
+            majuscule = false;
+        }
+        if matches!(*c, '.' | '!' | '?') {
+            majuscule = true;
+        }
+    }
+    chars.into_iter().collect()
+}
+
+/// Implémentation locale via `whisper-cli` (whisper.cpp), un processus par
+/// transcription. Les chemins du binaire et du modèle viennent des réglages.
+pub struct WhisperCli {
+    pub binary: PathBuf,
+    pub model: PathBuf,
+}
+
+impl WhisperCli {
+    pub fn new(binary: PathBuf, model: PathBuf) -> Self {
+        Self { binary, model }
+    }
+}
+
+impl TranscriptionEngine for WhisperCli {
+    fn name(&self) -> &'static str {
+        "whisper.cpp (CLI)"
+    }
+
+    fn transcribe(&self, wav_path: &Path) -> Result<String, String> {
+        if self.binary.as_os_str().is_empty() || !self.binary.exists() {
+            return Err(format!(
+                "whisper-cli introuvable : {} — configure le binaire dans les réglages",
+                self.binary.display()
+            ));
+        }
+        if self.model.as_os_str().is_empty() || !self.model.exists() {
+            return Err(format!(
+                "modèle Whisper introuvable : {} — configure-le dans les réglages",
+                self.model.display()
+            ));
+        }
+        if !wav_path.exists() {
+            return Err(format!("audio absent : {}", wav_path.display()));
+        }
+
+        let out_dir = std::env::temp_dir().join(format!("echo-trans-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&out_dir)
+            .map_err(|e| format!("dossier de transcription inaccessible : {e}"))?;
+        let out_base = out_dir.join("out");
+
+        let result = (|| -> Result<String, String> {
+        let mut command = Command::new(&self.binary);
+        command.arg("-m").arg(&self.model).arg("-f").arg(wav_path)
+            .arg("-otxt").arg("-of").arg(&out_base).arg("-l").arg("fr").arg("-nt")
+            .stdout(Stdio::null()).stderr(Stdio::null());
+        #[cfg(windows)] {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let mut child = command.spawn().map_err(|e| format!("impossible de lancer whisper-cli : {e}"))?;
+        let started = Instant::now();
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if started.elapsed() < Duration::from_secs(120) => std::thread::sleep(Duration::from_millis(100)),
+                result => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(match result {
+                        Err(e) => format!("lecture du processus Whisper impossible : {e}"),
+                        _ => "La transcription dépasse deux minutes. La dictée est conservée pour réessayer.".into(),
+                    });
+                }
+            }
+        };
+
+        if !status.success() {
+            return Err(format!(
+                "whisper-cli a échoué (code {})",
+                status.code().map(|c| c.to_string()).unwrap_or_default()
+            ));
+        }
+
+        let texte = std::fs::read_to_string(out_base.with_extension("txt"))
+            .map_err(|e| format!("sortie de whisper-cli illisible : {e}"))?;
+        Ok(texte.trim().to_string())
+        })();
+        let _ = std::fs::remove_dir_all(&out_dir);
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "nécessite ECHO_TEST_BINARY, ECHO_TEST_MODEL et ECHO_TEST_WAV"]
+    fn transcription_locale_fixture_reelle() {
+        let engine = WhisperCli::new(
+            std::env::var_os("ECHO_TEST_BINARY").expect("binaire de test").into(),
+            std::env::var_os("ECHO_TEST_MODEL").expect("modèle de test").into(),
+        );
+        let wav = PathBuf::from(std::env::var_os("ECHO_TEST_WAV").expect("WAV de test"));
+        let text = engine.transcribe(&wav).expect("transcription réelle");
+        assert!(text.to_lowercase().contains("bonjour"), "texte reçu : {text}");
+    }
+
+    struct MoteurFixe(String);
+    impl TranscriptionEngine for MoteurFixe {
+        fn name(&self) -> &'static str {
+            "moteur de test"
+        }
+        fn transcribe(&self, _wav: &Path) -> Result<String, String> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn le_trait_remplacable_fonctionne() {
+        let e = MoteurFixe("phrase transcrite".into());
+        assert_eq!(e.transcribe(Path::new("x.wav")).unwrap(), "phrase transcrite");
+        assert_eq!(e.name(), "moteur de test");
+    }
+
+    #[test]
+    fn le_nettoyage_retire_les_hesitations_et_met_des_majuscules() {
+        assert_eq!(
+            clean_text("euh bonjour. hein ceci est un test"),
+            "Bonjour. Ceci est un test"
+        );
+        assert_eq!(
+            clean_text("  du   texte   genre  melange  "),
+            "Du texte melange"
+        );
+        assert_eq!(clean_text(""), "");
+    }
+
+    #[test]
+    fn un_binaire_absent_donne_une_erreur_explicite() {
+        let e = WhisperCli::new(
+            PathBuf::from("Z:\\introuvable\\whisper-cli.exe"),
+            PathBuf::from("Z:\\introuvable\\model.bin"),
+        );
+        let err = e.transcribe(Path::new("x.wav")).unwrap_err();
+        assert!(err.contains("introuvable"), "message : {err}");
+    }
+
+    #[test]
+    fn un_audio_absent_est_refuse_avant_le_moteur() {
+        let dir = std::env::temp_dir().join(format!("echo-tr-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("fake.exe");
+        std::fs::write(&bin, b"x").unwrap();
+        let model = dir.join("m.bin");
+        std::fs::write(&model, b"x").unwrap();
+        let e = WhisperCli::new(bin, model);
+        let err = e.transcribe(&dir.join("absent.wav")).unwrap_err();
+        assert!(err.contains("audio absent"), "message : {err}");
+    }
+}

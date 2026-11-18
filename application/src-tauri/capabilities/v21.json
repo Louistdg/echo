@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "v21",
+  "description": "Fenêtres locales Écho V3",
+  "windows": [
+    "main",
+    "quick",
+    "capture",
+    "retouche",
+    "settings",
+    "dock-panels"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-start-resize-dragging"
+  ]
+}
