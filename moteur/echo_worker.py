@@ -806,6 +806,16 @@ def self_test():
             self.assertTrue(Path(event[1]["path"]).is_file())
 
     class EngineTests(unittest.TestCase):
+        def setUp(self):
+            from unittest.mock import DEFAULT, patch
+
+            # Keep hardware probes and Silero warmup outside the scheduling
+            # and cache tests. Their synthetic models represent job decodes.
+            model_probes = patch.multiple(sys.modules[__name__],
+                                          _verifier_inference=DEFAULT, chauffer_vad=DEFAULT)
+            model_probes.start()
+            self.addCleanup(model_probes.stop)
+
         @unittest.skipUnless(os.name == "nt", "Windows scheduling only")
         def test_final_priority_restored_after_failure_and_preview_unchanged(self):
             import ctypes
@@ -935,7 +945,7 @@ def self_test():
                 engine = Engine.__new__(Engine)
                 engine.model = None;engine.model_name = None;engine.models = collections.OrderedDict()
                 engine.load("base");engine.load("small")
-                with self.assertRaises(RuntimeError):
+                with self.assertRaisesRegex(RuntimeError, "model absent"):
                     engine.load("missing")
                 self.assertEqual(set(engine.models), {"base"})
                 engine.load("base")
