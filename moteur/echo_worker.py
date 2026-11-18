@@ -2,7 +2,7 @@
 """Écho V3: offline faster-whisper worker, JSON lines over standard I/O.
 
 The transcription thread keeps the preview and final models resident. The input thread also
-runs Silero on a sliding audio window for continuous, explicitly armed listening.
+runs recurrent Silero frames for continuous, explicitly armed listening.
 No microphone is opened here, no network endpoint is created, no text is logged.
 """
 from __future__ import annotations
@@ -46,27 +46,44 @@ class Segmenter:
     30 seconds and sealed as PCM16 WAV before announcing it to the parent.
     """
 
-    def __init__(self, directory: str, session: str, silence_ms: int, send=emit):
+    def __init__(self, directory: str, session: str, silence_ms: int, send=emit,
+                 *, preroll_samples=RATE * 3 // 5):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.session = session
         self.silence = RATE * max(350, min(6000, silence_ms)) // 1000
         self.send = send
-        self.preroll = collections.deque(maxlen=3)
+        self.preroll = collections.deque()
+        self.preroll_limit = max(0, int(preroll_samples))
+        self.preroll_size = 0
         self.audio = bytearray()
         self.id = None
         self.quiet = 0
         self.voiced_samples = 0
 
+    def remember(self, pcm):
+        if not pcm:
+            return
+        self.preroll.append(pcm)
+        self.preroll_size += len(pcm) // 2
+        while self.preroll_size > self.preroll_limit:
+            first = self.preroll.popleft()
+            excess = self.preroll_size - self.preroll_limit
+            removed = min(excess, len(first) // 2)
+            self.preroll_size -= removed
+            if removed * 2 < len(first):
+                self.preroll.appendleft(first[removed * 2:])
+
     def consume(self, pcm: bytes, voiced: bool):
         samples = len(pcm) // 2
         if self.id is None:
             if not voiced:
-                self.preroll.append(pcm)
+                self.remember(pcm)
                 return
             self.id = str(uuid.uuid4())
             self.audio = bytearray(b"".join(self.preroll))
             self.preroll.clear()
+            self.preroll_size = 0
             self.quiet = self.voiced_samples = 0
             self.send("speech_start", session=self.session, id=self.id,
                       path=str(self.directory / (self.id + ".wav")))
@@ -79,17 +96,18 @@ class Segmenter:
         if self.quiet >= self.silence or len(self.audio) // 2 >= MAX_UTTERANCE:
             self.finish()
 
-    def finish(self, cancelled=False):
+    def finish(self, cancelled=False, allow_short=False):
         if self.id is None:
             return
         identity, audio, spoken = self.id, bytes(self.audio), self.voiced_samples
         self.id = None
         self.audio.clear()
         self.preroll.clear()
+        self.preroll_size = 0
         self.quiet = self.voiced_samples = 0
         # A short syllable can still be useful; the final VAD filter decides
         # whether there is speech. Empty and sub-100ms triggers are ignored.
-        if spoken < RATE // 10:
+        if spoken < RATE // 10 and not allow_short:
             self.send("speech_empty", session=self.session, id=identity)
             return
         final = self.directory / (identity + ".wav")
@@ -110,42 +128,52 @@ class Segmenter:
 
 
 class LiveVad:
-    def __init__(self, request):
+    def __init__(self, request, detector=None):
         import numpy as np
-        from faster_whisper.vad import get_speech_timestamps, get_vad_model
-        get_vad_model()  # Fail before announcing that hands-free is ready.
+        from echo_streaming_vad import FRAME, StatefulSilero
         self.np = np
-        self.detect = get_speech_timestamps
+        self.frame = FRAME
+        # Fail before announcing ready. The adapter reuses the installed ONNX
+        # session; only h/c and 64 samples of context belong to this listening.
+        self.detector = detector if detector is not None else StatefulSilero()
         self.segmenter = Segmenter(request["directory"], request["id"],
-                                   int(request.get("silence_ms", 900)))
+                                   int(request.get("silence_ms", 900)), send=emit)
         self.pending = bytearray()
-        self.context = bytearray()
+        self.closed = False
+
+    def voiced(self, pcm, terminal=False):
+        audio = self.np.frombuffer(pcm, dtype="<i2").astype("float32") / 32768
+        if terminal and len(audio) < self.frame:
+            # Padding is only an input to the classifier. The WAV always keeps
+            # the original PCM and its exact number of samples.
+            audio = self.np.pad(audio, (0, self.frame - len(audio)))
+        probability = self.detector.probability(audio)
+        return probability >= 0.5 or (self.segmenter.id is not None and probability >= 0.35)
 
     def feed(self, pcm):
+        if self.closed:
+            return
         if len(pcm) % 2:
             raise ValueError("PCM16 incomplet")
         self.pending.extend(pcm)
-        while len(self.pending) >= BLOCK * 2:
-            block = bytes(self.pending[:BLOCK * 2])
-            del self.pending[:BLOCK * 2]
-            self.context.extend(block)
-            # 1.2 s gives Silero speech context while keeping each call bounded.
-            if len(self.context) > RATE * 2 * 6 // 5:
-                del self.context[:-RATE * 2 * 6 // 5]
-            audio = self.np.frombuffer(bytes(self.context), dtype="<i2").astype("float32") / 32768
-            speech = self.detect(audio, sampling_rate=RATE,
-                                 min_speech_duration_ms=80,
-                                 min_silence_duration_ms=100,
-                                 speech_pad_ms=0, threshold=0.5)
-            voiced = any(s["end"] > len(audio) - BLOCK for s in speech)
-            self.segmenter.consume(block, voiced)
+        while len(self.pending) >= self.frame * 2:
+            block = bytes(self.pending[:self.frame * 2])
+            del self.pending[:self.frame * 2]
+            self.segmenter.consume(block, self.voiced(block))
 
     def finish(self, cancelled=False):
-        # Preserve the remaining (<200 ms) samples when stopping mid-phrase.
-        if self.segmenter.id is not None and self.pending:
-            self.segmenter.audio.extend(self.pending)
+        if self.closed:
+            return
+        self.closed = True
+        tail = bytes(self.pending)
         self.pending.clear()
-        self.segmenter.finish(cancelled=cancelled)
+        if self.segmenter.id is not None:
+            self.segmenter.audio.extend(tail)
+        elif tail:
+            # A short word may only be recognized in this last incomplete frame.
+            # Classify it even when no speech_start has been announced yet.
+            self.segmenter.consume(tail, self.voiced(tail, terminal=True))
+        self.segmenter.finish(cancelled=cancelled, allow_short=True)
 
 
 def read_audio(path):
