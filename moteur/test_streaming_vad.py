@@ -71,6 +71,22 @@ class LiveVadTests(unittest.TestCase):
         self.assertEqual(self.events, [])
         self.assertEqual(list(Path(self.temp.name).iterdir()), [])
 
+    def test_pause_seals_exact_preroll_and_each_phrase_once(self):
+        live = self.create()
+        silence, speech, pause = pcm(FRAME * 50), pcm(FRAME * 4, 1234), pcm(FRAME * 19)
+        live.feed(silence)
+        live.feed(speech)
+        self.assertEqual(self.utterances(), [])
+        live.feed(pause)
+        first = self.utterances()[0]
+        self.assertEqual(self.read(first), silence[-9600 * 2:] + speech + pause)
+        live.feed(speech)
+        live.feed(pause)
+        live.finish()
+        self.assertEqual(len(self.utterances()), 2)
+        self.assertNotEqual(first["id"], self.utterances()[1]["id"])
+        self.assertEqual(self.read(self.utterances()[1]), speech + pause)
+
     def test_chunk_boundaries_and_stop_preserve_every_actual_sample_once(self):
         live = self.create()
         source = pcm(FRAME * 5 + 137, 2234)

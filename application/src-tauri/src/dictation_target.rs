@@ -46,7 +46,7 @@ mod native {
     }
     enum Request {
         Freeze { reply: mpsc::Sender<Result<String, String>>, deadline: Instant },
-        Insert { token: String, text: String, budget: Budget, reply: mpsc::Sender<Result<(), String>> },
+        Insert { token: String, text: String, require_frozen_field: bool, budget: Budget, reply: mpsc::Sender<Result<(), String>> },
         Live { token: String, text: String, restore: bool },
     }
     #[derive(Clone)]
@@ -253,7 +253,7 @@ mod native {
                 self.targets[index].live = text.to_string();
             }
         }
-        fn insert(&mut self, token:&str, text:&str, budget:&Budget) -> Result<(),String> {
+        fn insert(&mut self, token:&str, text:&str, require_frozen_field: bool, budget:&Budget) -> Result<(),String> {
             budget.check()?;
             let Some(index) = self.targets.iter().position(|t| t.token == token) else {
                 return Err("Cette cible appartient à une ancienne session. Le texte est conservé : utilise Copier ou Note Écho.".into());
@@ -278,6 +278,9 @@ mod native {
                 && (!live.is_empty()
                     || (observed.external_epoch == self.external_epoch
                         && super::foreground_allowed(current.0, current.1, observed.window, observed.window_pid, std::process::id())));
+            if require_frozen_field && !prefer_frozen {
+                return Err("La fenêtre a changé. Le texte reste dans Écho.".into());
+            }
             let aim = if prefer_frozen { (observed.window, observed.window_pid) } else { current };
             if current != aim {
                 budget.check()?;
@@ -309,6 +312,12 @@ mod native {
             let units = super::safe_units(text)?;
             let erase = live.chars().count();
             budget.check()?;
+            // A finalized phrase may arrive while the user is moving to another
+            // control in the same window, including during the modifier wait.
+            if require_frozen_field && !self.frozen_field_focused(&observed) {
+                return Err("Le champ de saisie a changé. Le texte reste dans Écho.".into());
+            }
+            budget.check()?;
             self.send_batch(index, aim, erase, &units)?;
             self.targets[index].live.clear();
             Ok(())
@@ -332,7 +341,7 @@ mod native {
         loop {
             match rx.recv_timeout(POLL) {
                 Ok(Request::Freeze {reply,deadline}) => { let result=worker.freeze(deadline);let _=reply.send(result); }
-                Ok(Request::Insert {token,text,budget,reply}) => { let result=worker.insert(&token,&text,&budget);let _=reply.send(result); }
+                Ok(Request::Insert {token,text,require_frozen_field,budget,reply}) => { let result=worker.insert(&token,&text,require_frozen_field,&budget);let _=reply.send(result); }
                 Ok(Request::Live {token,text,restore}) => worker.live(&token,&text,restore),
                 Err(mpsc::RecvTimeoutError::Timeout) => worker.observe(),
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -354,11 +363,11 @@ mod native {
         sender().try_send(Request::Freeze {reply:tx,deadline:Instant::now()+REQUEST_LIMIT}).map_err(|_|"La vérification du champ est occupée. Réessaie ou utilise Copier.".to_string())?;
         rx.recv_timeout(WAIT_LIMIT).map_err(|_|"Le champ Windows n’a pas répondu à temps. Utilise Copier ou Note Écho.".to_string())?
     }
-    pub fn insert(token:String,text:String)->Result<(),String> {
+    pub fn insert(token:String,text:String,require_frozen_field:bool)->Result<(),String> {
         super::safe_units(&text)?;
         let (tx,rx)=mpsc::channel();let cancelled=Arc::new(AtomicBool::new(false));
         let budget=Budget {deadline:Instant::now()+REQUEST_LIMIT,cancelled:cancelled.clone(),epoch:CANCEL_EPOCH.load(Ordering::Acquire)};
-        sender().try_send(Request::Insert {token,text,budget,reply:tx}).map_err(|_|"L’insertion Windows est occupée. Le texte est conservé.".to_string())?;
+        sender().try_send(Request::Insert {token,text,require_frozen_field,budget,reply:tx}).map_err(|_|"L’insertion Windows est occupée. Le texte est conservé.".to_string())?;
         match rx.recv_timeout(WAIT_LIMIT) { Ok(result)=>result,Err(_)=>{cancelled.store(true,Ordering::Release);Err("L’insertion a expiré. Le texte est conservé dans Écho.".into())} }
     }
     /// Fire-and-forget live preview: a full channel simply drops the update,
@@ -401,7 +410,12 @@ pub async fn insert_dictation_text(target:String,text:String)->Result<(),String>
     tauri::async_runtime::spawn_blocking(move||insert_at_cursor(target,text)).await.map_err(|e|e.to_string())?
 }
 pub fn insert_at_cursor(target:String,text:String)->Result<(),String> {
-    #[cfg(windows)]{native::insert(target,text)}
+    #[cfg(windows)]{native::insert(target,text,false)}
+    #[cfg(not(windows))]{let _=(target,text);Err("La dictée vers une autre application est disponible sur Windows.".into())}
+}
+
+pub(crate) fn insert_in_frozen_field(target: String, text: String) -> Result<(), String> {
+    #[cfg(windows)]{native::insert(target,text,true)}
     #[cfg(not(windows))]{let _=(target,text);Err("La dictée vers une autre application est disponible sur Windows.".into())}
 }
 /// Aperçu en direct vers le champ gelé, façon Win+H. Sans réponse : un canal

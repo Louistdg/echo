@@ -130,7 +130,7 @@ fn refresh(runtime: &mut Runtime) {
     }
     runtime.state.error = runtime.last_error.clone();
     if let Some(active) = runtime.active.as_ref() {
-        runtime.state.phase = if active.spec.mode == "handsfree" && !runtime.speech { "listening" } else { "recording" }.into();
+        runtime.state.phase = if streams_phrases(&active.spec.kind, &active.spec.mode) && !runtime.speech { "listening" } else { "recording" }.into();
         runtime.state.mode = active.spec.mode.clone();
         runtime.state.kind = active.spec.kind.clone();
         runtime.state.session_id = Some(active.spec.id.clone());
@@ -310,7 +310,7 @@ fn preview_event(app:&AppHandle,event:&Value)->bool{
    // le provisoire de la phrase suivante attend la restitution pour ne pas
    // mélanger les deux dans le champ.
    let pending=r.jobs.iter().any(|j|j.spec.id==session&&matches!(j.status.as_str(),"queued"|"transcribing"|"delivering"));
-   if pending{None}else{r.active.as_ref().and_then(|a|if a.spec.kind=="dictation"{match &a.spec.target{Target::Application{handle} if !handle.is_empty()=>Some(handle.clone()),_=>None}}else{None})}};
+   if pending { None } else { r.active.as_ref().and_then(|a| inline_preview_handle(&a.spec)) }};
   if let Some(handle)=handle{crate::dictation_target::live_update(handle,text,false);}
   publish(app);
  }
@@ -387,9 +387,22 @@ fn session_mode(kind:&str, configured:&str, requested:Option<&str>)->Result<Stri
  if !matches!(mode,"hold"|"toggle"|"handsfree"){return Err("Mode de dictée inconnu".into())}
  Ok(mode.into())
 }
+
+fn streams_phrases(kind: &str, mode: &str) -> bool {
+    kind == "dictation" && matches!(mode, "toggle" | "handsfree")
+}
+
+fn inline_preview_handle(spec: &SessionSpec) -> Option<String> {
+    match &spec.target {
+        Target::Application { handle } if spec.kind == "dictation"
+            && !streams_phrases(&spec.kind, &spec.mode) && !handle.is_empty() => Some(handle.clone()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod direct_click_tests{
- use super::session_mode;
+ use super::{session_mode, streams_phrases};
  #[test]fn click_can_listen_continuously_even_with_legacy_hold_preference(){
   assert_eq!(session_mode("dictation","hold",Some("handsfree")).unwrap(),"handsfree");
   assert_eq!(session_mode("dictation","hold",None).unwrap(),"hold");
@@ -397,6 +410,14 @@ mod direct_click_tests{
  #[test]fn audio_recording_and_invalid_overrides_have_defined_modes(){
   assert_eq!(session_mode("recording","handsfree",Some("handsfree")).unwrap(),"toggle");
   assert!(session_mode("dictation","hold",Some("invalid")).is_err());
+ }
+ #[test]
+ fn toggle_and_handsfree_stream_only_dictation() {
+    for mode in ["toggle", "handsfree"] {
+        assert!(streams_phrases("dictation", mode));
+        assert!(!streams_phrases("recording", mode));
+    }
+    assert!(!streams_phrases("dictation", "hold"));
  }
 }
 fn session_target(kind: &str, fallback: &FrozenNote) -> Result<(Target, String), String> {
@@ -485,8 +506,9 @@ fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option
     }
     publish(app);
     if spec.kind == "dictation" { preview_begin(&spec); }
+    let stream_phrases = streams_phrases(&spec.kind, &spec.mode);
     let result: Result<Option<capture::StreamCapture>, String> = (|| {
-        if spec.mode == "handsfree" {
+        if stream_phrases {
             let worker = ensure_worker(app, &spec.python)?;
             worker.send(json!({"op":"listen_start","id":spec.id,"directory":capture::recordings_dir(Path::new(&spec.workspace)),"silence_ms":silence_ms}))?;
             let until = Instant::now() + Duration::from_secs(12);
@@ -520,13 +542,13 @@ fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option
     match result {
         Ok(stream) => { let mut runtime = RUNTIME.lock().unwrap();
             runtime.arming = false; runtime.speech = false;
-            runtime.state.message = if spec.mode == "handsfree" { "Écoute active · une pause termine chaque phrase" } else if spec.kind == "recording" { "Enregistrement en cours" } else { "Parle, puis relâche ou arrête" }.into();
+            runtime.state.message = if stream_phrases { "Écoute active · une pause transmet chaque phrase" } else if spec.kind == "recording" { "Enregistrement en cours" } else { "Parle, puis relâche ou arrête" }.into();
             runtime.active = Some(Active { spec, started: Instant::now(), stream });
         }
         Err(error) => {
             preview_stop(&spec.id);
             { let mut runtime = RUNTIME.lock().unwrap(); runtime.arming = false; runtime.sessions.remove(&spec.id); }
-            if spec.mode == "handsfree" {
+            if stream_phrases {
                 if let Some(worker) = WORKER.lock().unwrap().clone() {
                     let _ = worker.send(json!({"op":"listen_stop","id":spec.id,"cancelled":true}));
                 }
@@ -612,7 +634,7 @@ fn job_error(app: &AppHandle, id: &str, message: String) {
             job.status = "error".into(); job.error = Some(message.clone());
             // Un échec avant restitution (par ex. aucune parole détectée)
             // efface aussi le provisoire tapé en direct dans le champ.
-            if let Target::Application { handle: h } = &job.spec.target { if !h.is_empty() { handle = Some(h.clone()); } }
+            handle = inline_preview_handle(&job.spec);
             let _ = persist(job);
         } else { runtime.last_error = Some(message.clone()); }
         if runtime.current.as_deref() == Some(id) { runtime.current = None; }
@@ -660,7 +682,13 @@ fn deliver(app: &AppHandle, id: &str, action: &str) -> Result<(), String> {
         "note" => workspace::append_transcript(&job.spec.fallback.target(), &job.text, &job.id).map(|_| ()),
         "auto" | "insert" => match &job.spec.target {
             Target::Note { note } => workspace::append_transcript(&note.target(), &job.text, &job.id).map(|_| ()),
-            Target::Application { handle } => if handle.is_empty(){Err("Le champ de saisie n’a pas été confirmé. Ton texte est conservé : utilise Copier.".into())}else{crate::dictation_target::insert_at_cursor(handle.clone(), if job.spec.mode=="handsfree"{format!("{} ",job.text.trim_end())}else{job.text.clone()})},
+            Target::Application { handle } if handle.is_empty() => {
+                Err("Le champ de saisie n’a pas été confirmé. Ton texte est conservé : utilise Copier.".into())
+            }
+            Target::Application { handle } if streams_phrases(&job.spec.kind, &job.spec.mode) => {
+                crate::dictation_target::insert_in_frozen_field(handle.clone(), format!("{} ", job.text.trim_end()))
+            }
+            Target::Application { handle } => crate::dictation_target::insert_at_cursor(handle.clone(), job.text.clone()),
         },
         _ => Err("Action de restitution inconnue".into()),
     };
@@ -670,8 +698,8 @@ fn deliver(app: &AppHandle, id: &str, action: &str) -> Result<(), String> {
             // Un provisoire tapé en direct ne doit pas survivre à un échec de
             // restitution : il est effacé du champ, le texte reste dans Écho.
             if matches!(action,"auto"|"insert") {
-                if let Target::Application { handle } = &job.spec.target {
-                    if !handle.is_empty() { crate::dictation_target::live_update(handle.clone(),String::new(),true); }
+                if let Some(handle) = inline_preview_handle(&job.spec) {
+                    crate::dictation_target::live_update(handle, String::new(), true);
                 }
             }
             { let mut runtime = RUNTIME.lock().unwrap();
@@ -703,7 +731,7 @@ fn worker_event(app: &AppHandle, event: Value) {
             let session = event["session"].as_str().unwrap_or("");
             let spec = { let mut runtime = RUNTIME.lock().unwrap(); runtime.speech = false; runtime.sessions.get(session).cloned() };
             if let Some(spec) = spec {
-                // Each durable hands-free phrase starts a fresh provisional view.
+                // Each durable phrase starts a fresh preview in the Écho interface.
                 if RUNTIME.lock().unwrap().active.as_ref().is_some_and(|a|a.spec.id==spec.id){preview_begin(&spec);}
                 let path = event["path"].as_str().unwrap_or("").to_string();
                 if !audio_belongs_to_workspace(&path, &spec.workspace) { job_error(app, &id, "Le moteur a renvoyé un chemin audio inattendu.".into()); return; }
@@ -776,7 +804,7 @@ fn cancel_impl(app: &AppHandle) -> Result<(), String> {
     let (jobs, live_handle) = { let mut runtime = RUNTIME.lock().unwrap(); runtime.current = None; runtime.last_error = None;
         runtime.state.text.clear(); runtime.state.partial.clear(); runtime.state.message = "Annulé · audio conservé".into();
         // Le provisoire tapé en direct est effacé du champ lors d'une annulation.
-        let handle = runtime.active.as_ref().and_then(|a| if a.spec.kind == "dictation" { match &a.spec.target { Target::Application { handle } if !handle.is_empty() => Some(handle.clone()), _ => None } } else { None });
+        let handle = runtime.active.as_ref().and_then(|a| inline_preview_handle(&a.spec));
         (runtime.jobs.drain(..).collect::<Vec<_>>(), handle)
     };
     if let Some(worker) = WORKER.lock().unwrap().clone() {
