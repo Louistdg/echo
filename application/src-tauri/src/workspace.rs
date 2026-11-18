@@ -53,7 +53,7 @@ impl Default for Settings {
         Self { extra: BTreeMap::new(), version: 30, workspace: "donnees".into(), recent_workspaces: vec![], active_note: None,
             theme: "nuit-boreale".into(), large_controls: false, reduce_motion: false, theme_favorites: vec![], theme_intensity: 0.45, personal_words: vec![],
             quick_width: 680.0, quick_height: 360.0, quick_x: None, quick_y: None, python: default_python(), model: "small".into(), language: "fr".into(),
-            voice_mode: "toggle".into(), destination: "note".into(), keep_audio: false, vad_silence_ms: 600,
+            voice_mode: "toggle".into(), destination: "note".into(), keep_audio: false, vad_silence_ms: 850,
             input_device: None, shortcut_dictation: "Ctrl+Alt+Space".into(),
             shortcut_capture: "Ctrl+Alt+S".into(), always_on_top: true, autostart: false }
     }
@@ -505,7 +505,7 @@ mod tests {
     fn single_voice_profile_normalizes_legacy_choice_and_preserves_preferences() {
         let mut old = Settings::default();
         assert_eq!(old.voice_mode, "toggle");
-        assert_eq!(old.vad_silence_ms, 600);
+        assert_eq!(old.vad_silence_ms, 850);
         old.model = "base".into();
         old.workspace = "existing-workspace".into();
         old.active_note = Some("existing.md".into());
