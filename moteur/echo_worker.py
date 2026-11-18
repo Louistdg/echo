@@ -28,6 +28,7 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 RATE = 16000
 BLOCK = 3200  # 200 ms: bounded IPC and VAD work, with a 600 ms pre-roll.
 MAX_UTTERANCE = RATE * 30
+MAX_LIVE_SECONDS = 300
 _PRINT = threading.Lock()
 
 
@@ -39,15 +40,21 @@ def emit(event: str, **values):
             os._exit(0)
 
 
+class PhraseLimitReached(RuntimeError):
+    """A bounded live phrase was sealed; the microphone must now stop."""
+
+
 class Segmenter:
     """Sample-counted utterance boundaries, independent of audio inference.
 
-    Only the short pre-roll lives in memory during silence. Speech is bounded to
-    30 seconds and sealed as PCM16 WAV before announcing it to the parent.
+    Only the short pre-roll lives in memory during silence. The default 30-second
+    bound is kept for existing callers; live listening sets its own finite bound.
+    Speech is sealed as PCM16 WAV before announcing it to the parent.
     """
 
     def __init__(self, directory: str, session: str, silence_ms: int, send=emit,
-                 *, preroll_samples=RATE * 3 // 5):
+                 *, preroll_samples=RATE * 3 // 5, max_utterance=MAX_UTTERANCE,
+                 stop_at_limit=False):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.session = session
@@ -56,6 +63,8 @@ class Segmenter:
         self.preroll = collections.deque()
         self.preroll_limit = max(0, int(preroll_samples))
         self.preroll_size = 0
+        self.max_utterance = max(1, int(max_utterance))
+        self.stop_at_limit = stop_at_limit
         self.audio = bytearray()
         self.id = None
         self.quiet = 0
@@ -93,8 +102,13 @@ class Segmenter:
             self.quiet = 0
         else:
             self.quiet += samples
-        if self.quiet >= self.silence or len(self.audio) // 2 >= MAX_UTTERANCE:
+        limited = len(self.audio) // 2 >= self.max_utterance
+        if self.quiet >= self.silence or limited:
             self.finish()
+            if limited and self.stop_at_limit:
+                raise PhraseLimitReached(
+                    f"Limite de {self.max_utterance // RATE} s de parole continue atteinte. "
+                    "L’audio est conservé ; reprends la dictée après une pause.")
 
     def finish(self, cancelled=False, allow_short=False):
         if self.id is None:
@@ -136,8 +150,10 @@ class LiveVad:
         # Fail before announcing ready. The adapter reuses the installed ONNX
         # session; only h/c and 64 samples of context belong to this listening.
         self.detector = detector if detector is not None else StatefulSilero()
+        limit = max(1, min(MAX_LIVE_SECONDS, int(request.get("max_phrase_secs", MAX_LIVE_SECONDS))))
         self.segmenter = Segmenter(request["directory"], request["id"],
-                                   int(request.get("silence_ms", 900)), send=emit)
+                                   int(request.get("silence_ms", 900)), send=emit,
+                                   max_utterance=RATE * limit, stop_at_limit=True)
         self.pending = bytearray()
         self.closed = False
 
@@ -156,10 +172,17 @@ class LiveVad:
         if len(pcm) % 2:
             raise ValueError("PCM16 incomplet")
         self.pending.extend(pcm)
-        while len(self.pending) >= self.frame * 2:
-            block = bytes(self.pending[:self.frame * 2])
-            del self.pending[:self.frame * 2]
-            self.segmenter.consume(block, self.voiced(block))
+        try:
+            while len(self.pending) >= self.frame * 2:
+                block = bytes(self.pending[:self.frame * 2])
+                del self.pending[:self.frame * 2]
+                self.segmenter.consume(block, self.voiced(block))
+        except PhraseLimitReached:
+            # The durable utterance was emitted before raising. Do not create
+            # another phrase when main() cleans up this session after the error.
+            self.closed = True
+            self.pending.clear()
+            raise
 
     def finish(self, cancelled=False):
         if self.closed:

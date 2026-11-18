@@ -3,8 +3,12 @@
 All neural boundaries use simulated detectors/sessions. No microphone, Whisper
 model or real ONNX session is opened by this suite.
 """
+import base64
+import io
+import json
 from pathlib import Path
 import struct
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -136,6 +140,45 @@ class LiveVadTests(unittest.TestCase):
         self.assertEqual(self.utterances(), [])
         live.feed(pcm(FRAME * 19))
         self.assertEqual(len(self.utterances()), 1)
+
+    def test_live_speech_is_not_forcibly_split_at_the_legacy_30_second_limit(self):
+        live = self.create()
+        source = pcm(FRAME * 950, 4567)
+        live.feed(source)
+        self.assertEqual(self.utterances(), [])
+        self.assertEqual(live.segmenter.max_utterance, 300 * RATE)
+        live.finish()
+        self.assertEqual(len(self.utterances()), 1)
+        self.assertEqual(self.read(self.utterances()[0]), source)
+
+    def test_requested_live_limit_is_always_finite_and_capped_at_five_minutes(self):
+        live = self.create(max_phrase_secs=99999)
+        self.assertEqual(live.segmenter.max_utterance, RATE * 300)
+
+    def test_limit_seals_before_session_error_and_cleanup_cannot_duplicate_the_phrase(self):
+        request = {"op": "listen_start", "id": "session", "directory": self.temp.name,
+                   "silence_ms": 600, "max_phrase_secs": 1}
+        messages = [request,
+                    {"op": "pcm", "id": "session", "data": base64.b64encode(pcm(FRAME * 32, 5678)).decode()},
+                    {"op": "pcm", "id": "session", "data": base64.b64encode(pcm(FRAME, 6789)).decode()},
+                    {"op": "listen_stop", "id": "session"}, {"op": "shutdown"}]
+        live_type = worker.LiveVad
+        detector = Detector()
+        with patch.object(worker, "LiveVad", side_effect=lambda req: live_type(req, detector=detector)), \
+             patch.object(worker, "Engine", return_value=SimpleNamespace()), \
+             patch.dict(sys.modules, {"faster_whisper": SimpleNamespace()}), \
+             patch.object(sys, "stdin", io.StringIO("\n".join(json.dumps(message) for message in messages))):
+            worker.main()
+        self.assertEqual(len(self.utterances()), 1)
+        self.assertEqual(self.read(self.utterances()[0]), pcm(FRAME * 32, 5678))
+        names = [event for event, _ in self.events]
+        self.assertLess(names.index("utterance"), names.index("error"))
+        errors = [values for event, values in self.events if event == "error"]
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["id"], "session")
+        self.assertIn("Limite", errors[0]["message"])
+        self.assertEqual(detector.calls, 32)
+        self.assertIn("listen_stopped", names)
 
 
 class RecurrentAdapterTests(unittest.TestCase):

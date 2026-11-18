@@ -17,6 +17,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::{capture, workspace};
 
 const MAX_JOBS: usize = 4;
+const DICTATION_LIMIT_SECS: u64 = 300;
+const RECORDING_LIMIT_SECS: u64 = 3600;
 static EPOCH: AtomicU64 = AtomicU64::new(1);
 static START_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -392,6 +394,10 @@ fn streams_phrases(kind: &str, mode: &str) -> bool {
     kind == "dictation" && matches!(mode, "toggle" | "handsfree")
 }
 
+fn capture_limit_secs(kind: &str) -> u64 {
+    if kind == "recording" { RECORDING_LIMIT_SECS } else { DICTATION_LIMIT_SECS }
+}
+
 fn inline_preview_handle(spec: &SessionSpec) -> Option<String> {
     match &spec.target {
         Target::Application { handle } if spec.kind == "dictation"
@@ -402,7 +408,7 @@ fn inline_preview_handle(spec: &SessionSpec) -> Option<String> {
 
 #[cfg(test)]
 mod direct_click_tests{
- use super::{session_mode, streams_phrases};
+ use super::{capture_limit_secs, session_mode, streams_phrases};
  #[test]fn click_can_listen_continuously_even_with_legacy_hold_preference(){
   assert_eq!(session_mode("dictation","hold",Some("handsfree")).unwrap(),"handsfree");
   assert_eq!(session_mode("dictation","hold",None).unwrap(),"hold");
@@ -418,6 +424,11 @@ mod direct_click_tests{
         assert!(!streams_phrases("recording", mode));
     }
     assert!(!streams_phrases("dictation", "hold"));
+ }
+ #[test]
+ fn dictation_and_recording_have_separate_capture_limits() {
+    assert_eq!(capture_limit_secs("dictation"), 300);
+    assert_eq!(capture_limit_secs("recording"), 3600);
  }
 }
 fn session_target(kind: &str, fallback: &FrozenNote) -> Result<(Target, String), String> {
@@ -510,7 +521,7 @@ fn start_impl(app: &AppHandle, kind: String, request: u64, mode_override: Option
     let result: Result<Option<capture::StreamCapture>, String> = (|| {
         if stream_phrases {
             let worker = ensure_worker(app, &spec.python)?;
-            worker.send(json!({"op":"listen_start","id":spec.id,"directory":capture::recordings_dir(Path::new(&spec.workspace)),"silence_ms":silence_ms}))?;
+            worker.send(json!({"op":"listen_start","id":spec.id,"directory":capture::recordings_dir(Path::new(&spec.workspace)),"silence_ms":silence_ms,"max_phrase_secs":DICTATION_LIMIT_SECS}))?;
             let until = Instant::now() + Duration::from_secs(12);
             loop {
                 let (ready, error) = { let runtime = RUNTIME.lock().unwrap(); (runtime.vad_ready.as_ref() == Some(&spec.id), runtime.last_error.clone()) };
@@ -940,7 +951,7 @@ pub fn init(app: &AppHandle) {
                 dispatch_next(&handle); publish(&handle);
             }
             let stop = { let runtime = RUNTIME.lock().unwrap(); runtime.active.as_ref().map(|active| {
-                let cap = if active.spec.kind == "recording" { 3600 } else if active.spec.mode == "handsfree" { 4 * 3600 } else { 300 };
+                let cap = capture_limit_secs(&active.spec.kind);
                 active.started.elapsed().as_secs() >= cap || active.stream.as_ref().is_some_and(|stream| stream.finished()) || (active.stream.is_none() && !capture::is_running())
             }).unwrap_or(false) };
             if stop { if let Err(error) = stop_impl(&handle, false) { fail(&handle, error); } }
