@@ -207,14 +207,27 @@ pub fn transcribe_and_append(app: AppHandle, path: String) -> Result<AppendResul
         return Err("ce fichier n'est pas un enregistrement d'Écho".into());
     }
 
-    let engine = crate::transcription::WhisperCli::new(
-        settings.whisper_bin.unwrap_or_default(),
-        settings.whisper_model.unwrap_or_default(),
-    );
-    let texte = crate::transcription::clean_text(&engine.transcribe(&wav)?);
-    if texte.is_empty() {
-        return Err("transcription vide — le moteur n'a rien entendu".into());
-    }
+    // v4 : le moteur installé à côté de l'exécutable est prioritaire ; les
+        // chemins des réglages servent de repli. Sans ça, un utilisateur qui n'a
+        // rien configuré n'obtenait qu'une erreur et ne pouvait pas dicter.
+        let engine = match crate::transcription::WhisperCli::discover() {
+            Some(decouvert) => decouvert,
+            None => crate::transcription::WhisperCli::new(
+                settings.whisper_bin.clone().unwrap_or_default(),
+                settings.whisper_model.clone().unwrap_or_default(),
+            ),
+        };
+        let avertissement_modele = engine.quality().quality_warning();
+        if let Some(a) = &avertissement_modele {
+            eprintln!("[echo] {a}");
+        }
+        let texte = crate::transcription::clean_text(&engine.transcribe(&wav)?);
+        if texte.is_empty() {
+            return Err(match avertissement_modele {
+                Some(a) => format!("transcription vide — le moteur n'a rien entendu. {a}"),
+                None => "transcription vide — le moteur n'a rien entendu".into(),
+            });
+        }
 
     let id = format!(
         "trans-{}",
